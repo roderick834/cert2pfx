@@ -20,7 +20,7 @@ export function SocketProvider({ children }) {
       return;
     }
 
-    const s = io('http://localhost:3001', {
+    const s = io('/', {
       auth: { token },
       reconnection: true,
       reconnectionDelay: 1000,
