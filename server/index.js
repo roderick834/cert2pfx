@@ -36,6 +36,15 @@ app.use('/api/messages', require('./routes/messages'));
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
+// Serve built React app in production
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = path.join(__dirname, '../client/dist');
+  app.use(express.static(clientDist));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
+
 // Socket.io setup
 const io = new Server(server, {
   cors: corsOptions
