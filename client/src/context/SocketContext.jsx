@@ -2,12 +2,13 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 
-const SocketContext = createContext(null);
+const SocketContext = createContext({ socket: null, partnerOnline: false });
 
 export function SocketProvider({ children }) {
-  const { user } = useAuth();
+  const { user, couple } = useAuth();
   const socketRef = useRef(null);
   const [socket, setSocket] = useState(null);
+  const [partnerOnline, setPartnerOnline] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -33,16 +34,33 @@ export function SocketProvider({ children }) {
       s.disconnect();
       socketRef.current = null;
       setSocket(null);
+      setPartnerOnline(false);
     };
   }, [user]);
 
+  useEffect(() => {
+    if (!socket || !couple?.partner?.id) return;
+    const partnerId = couple.partner.id;
+
+    const handleStatus = ({ userId, online }) => {
+      if (userId === partnerId) setPartnerOnline(online);
+    };
+
+    socket.on('partner-status', handleStatus);
+    return () => socket.off('partner-status', handleStatus);
+  }, [socket, couple]);
+
   return (
-    <SocketContext.Provider value={socket}>
+    <SocketContext.Provider value={{ socket, partnerOnline }}>
       {children}
     </SocketContext.Provider>
   );
 }
 
 export function useSocket() {
-  return useContext(SocketContext);
+  return useContext(SocketContext).socket;
+}
+
+export function usePartnerOnline() {
+  return useContext(SocketContext).partnerOnline;
 }

@@ -109,6 +109,7 @@ io.on('connection', (socket) => {
   socket.on('join-couple-room', (coupleId) => {
     socket.join(coupleId);
     console.log(`${socket.user.username} joined room: ${coupleId}`);
+    socket.to(coupleId).emit('partner-status', { userId: socket.user.id, online: true });
   });
 
   // Send message
@@ -213,6 +214,7 @@ io.on('connection', (socket) => {
     const coupleId = getCoupleId(socket.user.id);
     if (coupleId) {
       socket.to(coupleId).emit('call-ended');
+      socket.to(coupleId).emit('partner-status', { userId: socket.user.id, online: false });
     }
   });
 });

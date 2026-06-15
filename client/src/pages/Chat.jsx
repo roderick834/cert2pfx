@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useSocket } from '../context/SocketContext';
+import { useSocket, usePartnerOnline } from '../context/SocketContext';
 import api from '../api';
 
 export default function Chat() {
   const { user, couple } = useAuth();
   const socket = useSocket();
+  const partnerOnline = usePartnerOnline();
   const [messages, setMessages] = useState([]);
   const [stickers, setStickers] = useState([]);
   const [text, setText] = useState('');
@@ -112,6 +113,9 @@ export default function Chat() {
         <div>
           <p className="text-sm font-semibold text-gray-700">{couple.partner?.username || '等待另一半加入...'}</p>
           <p className="text-xs text-gray-400">在一起 {couple.daysTogether} 天</p>
+          <span className={`text-xs font-medium ${partnerOnline ? 'text-green-500' : 'text-gray-400'}`}>
+            {partnerOnline ? '● 在線上' : '○ 離線'}
+          </span>
         </div>
       </div>
 

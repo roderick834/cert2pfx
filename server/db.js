@@ -70,4 +70,14 @@ db.exec(`
 // Idempotent migration: add read_at to messages
 try { db.exec('ALTER TABLE messages ADD COLUMN read_at TEXT'); } catch {}
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS memory_files (
+    id TEXT PRIMARY KEY,
+    memory_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    order_num INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (memory_id) REFERENCES memories(id)
+  );
+`);
+
 module.exports = db;
