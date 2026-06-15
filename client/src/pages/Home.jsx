@@ -330,65 +330,68 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Below-hero content (scrollable) */}
-      <div className="px-4 pt-4 pb-4 space-y-3" style={{ background: 'transparent' }}>
+      {/* Below-hero content */}
+      <div className="px-4 pt-5 pb-6 space-y-4">
 
         {/* Upcoming date countdown */}
         {nextDate && (
           <button onClick={() => navigate('/dates')}
-            className="w-full bg-white rounded-2xl shadow-sm px-4 py-3.5 flex items-center gap-3 text-left active:scale-[0.98] transition-transform">
-            <div className="w-11 h-11 bg-rose-50 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
+            className="w-full bg-white rounded-3xl shadow-sm px-5 py-4 flex items-center gap-4 text-left active:scale-[0.98] transition-transform">
+            <div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0">
               {nextDate.emoji}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-gray-400 mb-0.5">即將到來</p>
-              <p className="font-semibold text-gray-700 text-sm truncate">{nextDate.title}</p>
+              <p className="text-xs text-gray-400 mb-1">即將到來</p>
+              <p className="font-semibold text-gray-700 truncate">{nextDate.title}</p>
             </div>
             <div className="flex flex-col items-end flex-shrink-0">
               {nextDate.days === 0 ? (
-                <span className="text-rose-500 font-bold text-sm">今天！🎉</span>
+                <span className="text-rose-500 font-bold">今天！🎉</span>
               ) : (
                 <>
-                  <span className="text-rose-500 font-bold text-xl leading-none">{nextDate.days}</span>
-                  <span className="text-gray-400 text-xs">天後</span>
+                  <span className="text-rose-500 font-bold text-2xl leading-none">{nextDate.days}</span>
+                  <span className="text-gray-400 text-xs mt-0.5">天後</span>
                 </>
               )}
             </div>
           </button>
         )}
 
-        {/* Love notes */}
-        <div className="space-y-2">
-          {/* Partner's note */}
-          {partnerNote ? (
-            <div className="bg-white rounded-2xl shadow-sm px-4 py-3.5">
-              <p className="text-xs text-gray-400 mb-1.5">💌 來自 {partnerNote.username} 的便利貼</p>
-              <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{partnerNote.content}</p>
-              <p className="text-xs text-gray-300 mt-1.5">{new Date(partnerNote.created_at).toLocaleDateString('zh-TW')}</p>
-            </div>
-          ) : (
-            <div className="bg-white/60 rounded-2xl px-4 py-3 text-center">
-              <p className="text-xs text-gray-400">另一半還沒有留下便利貼</p>
-            </div>
-          )}
+        {/* Love notes section */}
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 px-1">💌 愛的便利貼</p>
+
+          {/* Partner note */}
+          <div className="bg-white rounded-3xl shadow-sm p-5 mb-3 min-h-[80px]">
+            {partnerNote ? (
+              <>
+                <p className="text-xs text-rose-400 font-medium mb-2">{partnerNote.username} 說</p>
+                <p className="text-gray-700 text-base leading-relaxed whitespace-pre-wrap">{partnerNote.content}</p>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full min-h-[48px]">
+                <p className="text-gray-400 text-sm">對方還沒有留下便利貼 ...</p>
+              </div>
+            )}
+          </div>
 
           {/* My note */}
           {editingNote ? (
-            <div className="bg-white rounded-2xl shadow-sm px-4 py-3.5">
-              <p className="text-xs text-gray-400 mb-2">✏️ 寫下你的便利貼</p>
+            <div className="bg-rose-50 rounded-3xl p-5">
+              <p className="text-xs text-rose-400 font-medium mb-3">你說</p>
               <textarea
                 autoFocus
                 value={noteText}
                 onChange={e => setNoteText(e.target.value)}
-                placeholder="寫點什麼給對方..."
-                rows={3}
-                className="w-full text-sm text-gray-700 resize-none focus:outline-none leading-relaxed"
+                placeholder="說點什麼給對方..."
+                rows={4}
+                className="w-full text-base text-gray-700 resize-none focus:outline-none leading-relaxed bg-transparent"
               />
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-3 mt-4">
                 <button onClick={() => setEditingNote(false)}
-                  className="flex-1 py-1.5 rounded-xl text-sm text-gray-400 bg-gray-50">取消</button>
+                  className="flex-1 py-3 rounded-2xl text-gray-500 bg-white font-medium">取消</button>
                 <button onClick={saveNote} disabled={savingNote || !noteText.trim()}
-                  className="flex-1 py-1.5 rounded-xl text-sm font-semibold bg-rose-500 text-white disabled:opacity-50">
+                  className="flex-1 py-3 rounded-2xl font-semibold bg-rose-500 text-white disabled:opacity-50">
                   {savingNote ? '儲存中...' : '送出 ❤️'}
                 </button>
               </div>
@@ -396,14 +399,17 @@ export default function Home() {
           ) : (
             <button
               onClick={() => { setNoteText(myNote?.content || ''); setEditingNote(true); }}
-              className="w-full bg-rose-50 rounded-2xl px-4 py-3.5 text-left active:scale-[0.98] transition-transform">
+              className="w-full bg-rose-50 rounded-3xl p-5 text-left active:scale-[0.98] transition-transform min-h-[80px] flex flex-col justify-center">
               {myNote ? (
                 <>
-                  <p className="text-xs text-rose-400 mb-1">✏️ 我的便利貼（點擊修改）</p>
-                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">{myNote.content}</p>
+                  <p className="text-xs text-rose-400 font-medium mb-2">你說（點擊修改）</p>
+                  <p className="text-gray-600 text-base leading-relaxed whitespace-pre-wrap">{myNote.content}</p>
                 </>
               ) : (
-                <p className="text-center text-rose-400 text-sm">✏️ 留下便利貼給對方</p>
+                <div className="flex items-center justify-center gap-2 py-2">
+                  <span className="text-2xl">✏️</span>
+                  <span className="text-rose-400 font-medium">留下便利貼給對方</span>
+                </div>
               )}
             </button>
           )}

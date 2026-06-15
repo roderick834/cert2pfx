@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCall } from '../context/CallContext';
+import { useTheme } from '../context/ThemeContext';
 
 const navItems = [
   { to: '/', icon: '🏠', label: '首頁' },
@@ -13,6 +14,7 @@ const navItems = [
 export default function Layout() {
   const { user, couple } = useAuth();
   const { status, callType, incomingData, answerCall, endCall } = useCall();
+  const { dark, toggleDark } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -31,7 +33,13 @@ export default function Layout() {
               在一起 {couple.daysTogether} 天 ❤️
             </span>
           )}
-          <span className="text-sm text-gray-500">{user?.username}</span>
+          <button
+            onClick={toggleDark}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-lg bg-gray-100 dark:bg-gray-700 transition-colors"
+            aria-label="切換深色模式"
+          >
+            {dark ? '☀️' : '🌙'}
+          </button>
         </div>
       </header>
 
