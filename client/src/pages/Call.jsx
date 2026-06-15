@@ -111,8 +111,11 @@ export default function Call() {
     stream.getTracks().forEach((t) => pc.addTrack(t, stream));
 
     pc.ontrack = (e) => {
-      if (remoteVideoRef.current && e.streams[0]) {
-        remoteVideoRef.current.srcObject = e.streams[0];
+      const stream = e.streams[0] || new MediaStream([e.track]);
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = stream;
+        // iOS Safari sometimes needs an explicit play() after srcObject is set
+        remoteVideoRef.current.play().catch(() => {});
       }
     };
 
@@ -205,22 +208,29 @@ export default function Call() {
 
   return (
     <div className="flex flex-col items-center min-h-[calc(100vh-8rem)] bg-gradient-to-b from-rose-50 to-white">
-      {/* Video area — always rendered so refs stay attached */}
+      {/* Video area — always rendered so refs stay attached; hidden until in-call */}
       <div
         className="relative w-full bg-black"
         style={{
-          height: (status === 'connected' || status === 'calling') ? undefined : 0,
-          maxHeight: 320,
+          height: (status === 'connected' || status === 'calling') ? '55vw' : 0,
+          maxHeight: (status === 'connected' || status === 'calling') ? 320 : 0,
           overflow: 'hidden',
+          transition: 'height 0.2s',
         }}
       >
-        <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          className="w-full h-full object-cover"
+          style={{ background: '#000' }}
+        />
         <video
           ref={localVideoRef}
           autoPlay
           playsInline
           muted
-          className="absolute bottom-3 right-3 w-24 h-16 object-cover rounded-xl border-2 border-white shadow-lg"
+          className="absolute bottom-3 right-3 w-24 h-16 object-cover rounded-xl border-2 border-white shadow-lg bg-black"
         />
       </div>
 

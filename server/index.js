@@ -13,9 +13,9 @@ const PORT = process.env.PORT || 3001;
 const app = express();
 const server = http.createServer(app);
 
-// CORS configuration
+// Allow all origins in production (same-origin from Railway) and localhost in dev
 const corsOptions = {
-  origin: 'http://localhost:5173',
+  origin: true,
   credentials: true
 };
 
