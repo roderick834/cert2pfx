@@ -188,6 +188,18 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Mark partner's messages as read and notify them
+  socket.on('mark-read', () => {
+    const userId = socket.user.id;
+    const coupleId = getCoupleId(userId);
+    if (!coupleId) return;
+    const now = new Date().toISOString();
+    db.prepare(
+      'UPDATE messages SET read_at = ? WHERE couple_id = ? AND sender_id != ? AND read_at IS NULL'
+    ).run(now, coupleId, userId);
+    socket.to(coupleId).emit('messages-read', { read_at: now });
+  });
+
   socket.on('webrtc-ice-candidate', (data) => {
     const coupleId = getCoupleId(socket.user.id);
     if (coupleId) {

@@ -55,3 +55,16 @@ body {
   from { opacity: 0; transform: scale(0.3); }
   to { opacity: 1; transform: scale(1); }
 }
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0.3) rotate(-15deg); }
+  50% { opacity: 0.9; transform: scale(1) rotate(15deg); }
+}
+
+.sparkle-star {
+  animation: sparkle 2s ease-in-out infinite;
+  pointer-events: none;
+  position: absolute;
+  color: rgba(255,255,255,0.9);
+  text-shadow: 0 0 6px rgba(255,255,255,0.8);
+}

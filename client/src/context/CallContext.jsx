@@ -18,43 +18,55 @@ export function CallProvider({ children }) {
   const socket = useSocket();
   const { couple } = useAuth();
 
-  const [status, setStatus] = useState('idle'); // idle | calling | incoming | connected
+  const [status, setStatus] = useState('idle');
   const [callType, setCallType] = useState('audio');
   const [incomingData, setIncomingData] = useState(null);
   const [callError, setCallError] = useState('');
-  const [isSpeaker, setIsSpeaker] = useState(false); // default: earpiece
+  const [isSpeaker, setIsSpeaker] = useState(false);
 
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
   const pendingCandidates = useRef([]);
   const audioCtxRef = useRef(null);
-
-  // Video element refs — set by the Call page via callback refs
+  // Persistent <audio> element lives in document.body, not inside any React component.
+  // This means audio keeps playing when the user navigates away from the Call page.
+  const remoteAudioRef = useRef(null);
   const localVideoEl = useRef(null);
   const remoteVideoEl = useRef(null);
+
+  useEffect(() => {
+    const el = document.createElement('audio');
+    el.autoplay = true;
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    remoteAudioRef.current = el;
+    return () => {
+      el.remove();
+      remoteAudioRef.current = null;
+    };
+  }, []);
 
   const attachStreams = useCallback(() => {
     if (localVideoEl.current && localStreamRef.current) {
       localVideoEl.current.srcObject = localStreamRef.current;
     }
     if (remoteVideoEl.current && remoteStreamRef.current) {
+      remoteVideoEl.current.muted = true;
       remoteVideoEl.current.srcObject = remoteStreamRef.current;
       remoteVideoEl.current.play().catch(() => {});
     }
   }, []);
 
-  // Callback refs — Call page passes these to its <video> elements
   const localVideoRef = useCallback((el) => {
     localVideoEl.current = el;
-    if (el && localStreamRef.current) {
-      el.srcObject = localStreamRef.current;
-    }
+    if (el && localStreamRef.current) el.srcObject = localStreamRef.current;
   }, []);
 
   const remoteVideoRef = useCallback((el) => {
     remoteVideoEl.current = el;
     if (el && remoteStreamRef.current) {
+      el.muted = true; // audio handled by remoteAudioRef
       el.srcObject = remoteStreamRef.current;
       el.play().catch(() => {});
     }
@@ -71,6 +83,10 @@ export function CallProvider({ children }) {
     audioCtxRef.current = null;
     if (localVideoEl.current) localVideoEl.current.srcObject = null;
     if (remoteVideoEl.current) remoteVideoEl.current.srcObject = null;
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
+      remoteAudioRef.current.muted = false;
+    }
     setStatus('idle');
     setIncomingData(null);
     setCallError('');
@@ -130,7 +146,14 @@ export function CallProvider({ children }) {
     pc.ontrack = (e) => {
       const remote = e.streams[0] || new MediaStream([e.track]);
       remoteStreamRef.current = remote;
+      // Audio → persistent element in document.body (survives navigation)
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = remote;
+        remoteAudioRef.current.play().catch(() => {});
+      }
+      // Video → React video element (muted — no double audio)
       if (remoteVideoEl.current) {
+        remoteVideoEl.current.muted = true;
         remoteVideoEl.current.srcObject = remote;
         remoteVideoEl.current.play().catch(() => {});
       }
@@ -196,46 +219,34 @@ export function CallProvider({ children }) {
   };
 
   const toggleSpeaker = async () => {
-    const videoEl = remoteVideoEl.current;
+    const audioEl = remoteAudioRef.current;
     const stream = remoteStreamRef.current;
-    if (!stream) return;
+    if (!stream || !audioEl) return;
 
     const next = !isSpeaker;
     setIsSpeaker(next);
 
     if (next) {
-      // Switch to speaker
-      if (videoEl?.setSinkId) {
-        try { await videoEl.setSinkId(''); } catch {}
-      } else {
-        // iOS fallback: AudioContext routes to speaker
-        if (!audioCtxRef.current) {
-          const Ctx = window.AudioContext || window.webkitAudioContext;
-          if (Ctx) {
-            const ctx = new Ctx();
-            const src = ctx.createMediaStreamSource(stream);
-            src.connect(ctx.destination);
-            audioCtxRef.current = ctx;
-            if (videoEl) videoEl.muted = true;
-          }
+      // Speaker: AudioContext forces audio to loudspeaker (works on iOS Safari)
+      if (!audioCtxRef.current) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (Ctx) {
+          const ctx = new Ctx();
+          const src = ctx.createMediaStreamSource(stream);
+          src.connect(ctx.destination);
+          audioCtxRef.current = ctx;
+          audioEl.muted = true; // AudioContext handles output now
         }
       }
     } else {
-      // Switch to earpiece
-      if (videoEl?.setSinkId) {
-        try {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const ear = devices.find((d) => d.kind === 'audiooutput' && /ear|receiver/i.test(d.label));
-          await videoEl.setSinkId(ear?.deviceId || 'communications');
-        } catch { try { await videoEl.setSinkId('communications'); } catch {} }
-      } else {
-        // iOS: close AudioContext, unmute video
-        if (audioCtxRef.current) {
-          audioCtxRef.current.close();
-          audioCtxRef.current = null;
-          if (videoEl) videoEl.muted = false;
-        }
+      // Earpiece: close AudioContext, let audio element output normally
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close();
+        audioCtxRef.current = null;
       }
+      audioEl.muted = false;
+      audioEl.srcObject = stream;
+      audioEl.play().catch(() => {});
     }
   };
 

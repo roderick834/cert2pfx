@@ -67,4 +67,7 @@ db.exec(`
   );
 `);
 
+// Idempotent migration: add read_at to messages
+try { db.exec('ALTER TABLE messages ADD COLUMN read_at TEXT'); } catch {}
+
 module.exports = db;

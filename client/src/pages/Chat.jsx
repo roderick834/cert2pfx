@@ -11,17 +11,26 @@ export default function Chat() {
   const [text, setText] = useState('');
   const [showStickers, setShowStickers] = useState(false);
   const [loading, setLoading] = useState(true);
+  // partnerLastRead: ISO string of when partner last read my messages
+  const [partnerLastRead, setPartnerLastRead] = useState(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
     if (!couple) return;
-    Promise.all([
-      api.get('/messages'),
-      api.get('/stickers')
-    ]).then(([msgRes, stickerRes]) => {
-      setMessages(msgRes.data.messages);
-      setStickers(stickerRes.data.stickers);
-    }).catch(() => {})
+    Promise.all([api.get('/messages'), api.get('/stickers')])
+      .then(([msgRes, stickerRes]) => {
+        const msgs = msgRes.data.messages;
+        setMessages(msgs);
+        setStickers(stickerRes.data.stickers);
+        // Derive initial partnerLastRead from loaded messages
+        const lastRead = msgs
+          .filter((m) => m.sender_id === user?.id && m.read_at)
+          .map((m) => m.read_at)
+          .sort()
+          .pop();
+        if (lastRead) setPartnerLastRead(lastRead);
+      })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [couple]);
 
@@ -31,9 +40,24 @@ export default function Chat() {
 
     const handleNew = (msg) => {
       setMessages((prev) => [...prev, msg]);
+      // Auto-mark incoming messages as read (user is actively in chat)
+      socket.emit('mark-read');
     };
+    const handleRead = ({ read_at }) => {
+      setPartnerLastRead(read_at);
+    };
+
     socket.on('new-message', handleNew);
-    return () => socket.off('new-message', handleNew);
+    socket.on('messages-read', handleRead);
+    return () => {
+      socket.off('new-message', handleNew);
+      socket.off('messages-read', handleRead);
+    };
+  }, [socket, couple]);
+
+  // Mark messages as read when chat opens
+  useEffect(() => {
+    if (socket && couple) socket.emit('mark-read');
   }, [socket, couple]);
 
   useEffect(() => {
@@ -65,6 +89,19 @@ export default function Chat() {
     );
   }
 
+  // Find the last message I sent that has been read (to show 已讀 under it)
+  const myMessages = messages.filter((m) => m.sender_id === user?.id);
+  let lastReadMsgId = null;
+  if (partnerLastRead) {
+    for (let i = myMessages.length - 1; i >= 0; i--) {
+      const m = myMessages[i];
+      if (new Date(m.created_at) <= new Date(partnerLastRead)) {
+        lastReadMsgId = m.id;
+        break;
+      }
+    }
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Chat header */}
@@ -91,27 +128,26 @@ export default function Chat() {
           messages.map((msg) => {
             const isMe = msg.sender_id === user?.id;
             const sticker = msg.sticker_id ? stickers.find((s) => s.id === msg.sticker_id) : null;
+            const showRead = isMe && msg.id === lastReadMsgId;
             return (
               <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[72%] ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
                   {sticker ? (
-                    <img
-                      src={sticker.image_data}
-                      alt={sticker.name}
-                      className="w-24 h-24 object-contain rounded-2xl animate-bounce-in"
-                    />
+                    <img src={sticker.image_data} alt={sticker.name}
+                      className="w-24 h-24 object-contain rounded-2xl animate-bounce-in" />
                   ) : (
-                    <div
-                      className={`rounded-2xl px-4 py-2.5 text-sm shadow-sm animate-fade-in ${
-                        isMe
-                          ? 'bg-rose-500 text-white rounded-br-md'
-                          : 'bg-white text-gray-700 rounded-bl-md'
-                      }`}
-                    >
+                    <div className={`rounded-2xl px-4 py-2.5 text-sm shadow-sm animate-fade-in ${
+                      isMe ? 'bg-rose-500 text-white rounded-br-md' : 'bg-white text-gray-700 rounded-bl-md'
+                    }`}>
                       {msg.content}
                     </div>
                   )}
-                  <span className="text-xs text-gray-400 mt-1 px-1">{formatTime(msg.created_at)}</span>
+                  <div className={`flex items-center gap-1 mt-1 px-1 ${isMe ? 'flex-row-reverse' : ''}`}>
+                    <span className="text-xs text-gray-400">{formatTime(msg.created_at)}</span>
+                    {showRead && (
+                      <span className="text-xs text-rose-400 font-medium">已讀</span>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -129,11 +165,8 @@ export default function Chat() {
             </p>
           ) : (
             stickers.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => sendSticker(s)}
-                className="aspect-square rounded-xl overflow-hidden hover:scale-105 transition-transform"
-              >
+              <button key={s.id} onClick={() => sendSticker(s)}
+                className="aspect-square rounded-xl overflow-hidden hover:scale-105 transition-transform">
                 <img src={s.image_data} alt={s.name} className="w-full h-full object-contain" />
               </button>
             ))
@@ -143,25 +176,18 @@ export default function Chat() {
 
       {/* Input bar */}
       <div className="bg-white border-t border-rose-100 px-3 py-3 flex items-center gap-2">
-        <button
-          onClick={() => setShowStickers(!showStickers)}
-          className={`text-xl p-2 rounded-full transition-all ${showStickers ? 'bg-rose-100 text-rose-500' : 'text-gray-400 hover:text-rose-400'}`}
-        >
+        <button onClick={() => setShowStickers(!showStickers)}
+          className={`text-xl p-2 rounded-full transition-all ${showStickers ? 'bg-rose-100 text-rose-500' : 'text-gray-400 hover:text-rose-400'}`}>
           😊
         </button>
         <input
-          type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
+          type="text" value={text} onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); } }}
           placeholder="傳送訊息..."
           className="flex-1 border border-rose-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
         />
-        <button
-          onClick={sendText}
-          disabled={!text.trim()}
-          className="bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white p-2.5 rounded-full transition-all"
-        >
+        <button onClick={sendText} disabled={!text.trim()}
+          className="bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white p-2.5 rounded-full transition-all">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
             <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
           </svg>
