@@ -67,8 +67,33 @@ db.exec(`
   );
 `);
 
-// Idempotent migration: add read_at to messages
+// Idempotent migrations
 try { db.exec('ALTER TABLE messages ADD COLUMN read_at TEXT'); } catch {}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS special_dates (
+    id TEXT PRIMARY KEY,
+    couple_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    date TEXT NOT NULL,
+    repeat_yearly INTEGER NOT NULL DEFAULT 1,
+    emoji TEXT NOT NULL DEFAULT '🗓️',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (couple_id) REFERENCES couples(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS love_notes (
+    id TEXT PRIMARY KEY,
+    couple_id TEXT NOT NULL,
+    sender_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (couple_id) REFERENCES couples(id),
+    FOREIGN KEY (sender_id) REFERENCES users(id)
+  );
+`);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS memory_files (

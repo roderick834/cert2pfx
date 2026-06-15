@@ -61,6 +61,8 @@ app.use('/api/couples', require('./routes/couples'));
 app.use('/api/memories', require('./routes/memories'));
 app.use('/api/stickers', require('./routes/stickers'));
 app.use('/api/messages', require('./routes/messages'));
+app.use('/api/dates', require('./routes/dates'));
+app.use('/api/notes', require('./routes/notes'));
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok' }));

@@ -1,7 +1,20 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePartnerOnline } from '../context/SocketContext';
+import api from '../api';
+
+function daysUntil(dateStr, repeatYearly) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const parts = dateStr.split('-').map(Number);
+  let target = new Date(parts[0], parts[1] - 1, parts[2]);
+  if (repeatYearly) {
+    target = new Date(today.getFullYear(), parts[1] - 1, parts[2]);
+    if (target < today) target = new Date(today.getFullYear() + 1, parts[1] - 1, parts[2]);
+  }
+  return Math.round((target - today) / 86400000);
+}
 
 const PRESETS = [
   { id: 'rose',   gradient: 'linear-gradient(160deg,#fda4af 0%,#fbcfe8 60%,#fff1f2 100%)' },
@@ -152,6 +165,46 @@ export default function Home() {
   const [cropFile, setCropFile] = useState(null);
   const bgUploadRef = useRef();
 
+  const [partnerNote, setPartnerNote] = useState(null);
+  const [myNote, setMyNote] = useState(null);
+  const [editingNote, setEditingNote] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const [nextDate, setNextDate] = useState(null);
+
+  useEffect(() => {
+    if (!couple) return;
+    api.get('/notes').then(r => {
+      setPartnerNote(r.data.partner);
+      setMyNote(r.data.mine);
+    }).catch(() => {});
+
+    api.get('/dates').then(r => {
+      const coupleDate = couple?.couple?.couple_date;
+      const extra = r.data.dates || [];
+      const all = [
+        ...(coupleDate ? [{ id: '__ann__', title: '在一起的紀念日 💕', date: coupleDate.split('T')[0], repeat_yearly: 1, emoji: '💑' }] : []),
+        ...extra,
+      ];
+      const upcoming = all
+        .map(d => ({ ...d, days: daysUntil(d.date, d.repeat_yearly) }))
+        .filter(d => d.days >= 0)
+        .sort((a, b) => a.days - b.days)[0] || null;
+      setNextDate(upcoming);
+    }).catch(() => {});
+  }, [couple]);
+
+  const saveNote = async () => {
+    if (!noteText.trim()) return;
+    setSavingNote(true);
+    try {
+      const r = await api.post('/notes', { content: noteText });
+      setMyNote(r.data.note);
+      setEditingNote(false);
+    } catch {}
+    finally { setSavingNote(false); }
+  };
+
   const saveBg = (b) => {
     setBg(b);
     localStorage.setItem('together-home-bg', JSON.stringify(b));
@@ -274,6 +327,86 @@ export default function Home() {
               </button>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Below-hero content (scrollable) */}
+      <div className="px-4 pt-4 pb-4 space-y-3" style={{ background: 'transparent' }}>
+
+        {/* Upcoming date countdown */}
+        {nextDate && (
+          <button onClick={() => navigate('/dates')}
+            className="w-full bg-white rounded-2xl shadow-sm px-4 py-3.5 flex items-center gap-3 text-left active:scale-[0.98] transition-transform">
+            <div className="w-11 h-11 bg-rose-50 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
+              {nextDate.emoji}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-400 mb-0.5">即將到來</p>
+              <p className="font-semibold text-gray-700 text-sm truncate">{nextDate.title}</p>
+            </div>
+            <div className="flex flex-col items-end flex-shrink-0">
+              {nextDate.days === 0 ? (
+                <span className="text-rose-500 font-bold text-sm">今天！🎉</span>
+              ) : (
+                <>
+                  <span className="text-rose-500 font-bold text-xl leading-none">{nextDate.days}</span>
+                  <span className="text-gray-400 text-xs">天後</span>
+                </>
+              )}
+            </div>
+          </button>
+        )}
+
+        {/* Love notes */}
+        <div className="space-y-2">
+          {/* Partner's note */}
+          {partnerNote ? (
+            <div className="bg-white rounded-2xl shadow-sm px-4 py-3.5">
+              <p className="text-xs text-gray-400 mb-1.5">💌 來自 {partnerNote.username} 的便利貼</p>
+              <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{partnerNote.content}</p>
+              <p className="text-xs text-gray-300 mt-1.5">{new Date(partnerNote.created_at).toLocaleDateString('zh-TW')}</p>
+            </div>
+          ) : (
+            <div className="bg-white/60 rounded-2xl px-4 py-3 text-center">
+              <p className="text-xs text-gray-400">另一半還沒有留下便利貼</p>
+            </div>
+          )}
+
+          {/* My note */}
+          {editingNote ? (
+            <div className="bg-white rounded-2xl shadow-sm px-4 py-3.5">
+              <p className="text-xs text-gray-400 mb-2">✏️ 寫下你的便利貼</p>
+              <textarea
+                autoFocus
+                value={noteText}
+                onChange={e => setNoteText(e.target.value)}
+                placeholder="寫點什麼給對方..."
+                rows={3}
+                className="w-full text-sm text-gray-700 resize-none focus:outline-none leading-relaxed"
+              />
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => setEditingNote(false)}
+                  className="flex-1 py-1.5 rounded-xl text-sm text-gray-400 bg-gray-50">取消</button>
+                <button onClick={saveNote} disabled={savingNote || !noteText.trim()}
+                  className="flex-1 py-1.5 rounded-xl text-sm font-semibold bg-rose-500 text-white disabled:opacity-50">
+                  {savingNote ? '儲存中...' : '送出 ❤️'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setNoteText(myNote?.content || ''); setEditingNote(true); }}
+              className="w-full bg-rose-50 rounded-2xl px-4 py-3.5 text-left active:scale-[0.98] transition-transform">
+              {myNote ? (
+                <>
+                  <p className="text-xs text-rose-400 mb-1">✏️ 我的便利貼（點擊修改）</p>
+                  <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">{myNote.content}</p>
+                </>
+              ) : (
+                <p className="text-center text-rose-400 text-sm">✏️ 留下便利貼給對方</p>
+              )}
+            </button>
+          )}
         </div>
       </div>
 

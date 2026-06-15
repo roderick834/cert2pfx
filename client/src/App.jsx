@@ -13,6 +13,7 @@ import Chat from './pages/Chat';
 import Call from './pages/Call';
 import StickerMaker from './pages/StickerMaker';
 import Profile from './pages/Profile';
+import Dates from './pages/Dates';
 
 const Spinner = () => (
   <div className="min-h-screen flex items-center justify-center bg-rose-50">
@@ -50,6 +51,7 @@ function AppRoutes() {
         <Route path="/chat" element={<Chat />} />
         <Route path="/call" element={<Call />} />
         <Route path="/stickers" element={<StickerMaker />} />
+        <Route path="/dates" element={<Dates />} />
         <Route path="/profile" element={<Profile />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
