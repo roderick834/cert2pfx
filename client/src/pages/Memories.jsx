@@ -5,7 +5,7 @@ import api from '../api';
 const TYPE_LABELS = { photo: '照片', video: '影片', text: '文字' };
 const TYPE_ICONS  = { photo: '📷', video: '🎬', text: '📝' };
 
-// Swipeable photo viewer inside detail modal
+// Swipeable full-screen photo viewer
 function PhotoViewer({ files }) {
   const [idx, setIdx] = useState(0);
   const touchX = useRef(null);
@@ -24,31 +24,30 @@ function PhotoViewer({ files }) {
   if (files.length === 0) return null;
 
   return (
-    <div className="relative bg-black select-none" style={{ maxHeight: '55vw', maxWidth: '100%', overflow: 'hidden' }}
+    <div className="relative w-full h-full bg-black select-none"
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <img
         src={files[idx]}
         alt=""
-        className="w-full object-contain"
-        style={{ maxHeight: '55vw', display: 'block', margin: '0 auto' }}
+        className="absolute inset-0 w-full h-full object-contain"
       />
       {files.length > 1 && (
         <>
           <button onClick={prev} disabled={idx === 0}
-            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center disabled:opacity-30">
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 text-white text-xl flex items-center justify-center disabled:opacity-20">
             ‹
           </button>
           <button onClick={next} disabled={idx === files.length - 1}
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center disabled:opacity-30">
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 text-white text-xl flex items-center justify-center disabled:opacity-20">
             ›
           </button>
-          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+          <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
             {files.map((_, i) => (
               <button key={i} onClick={() => setIdx(i)}
-                className={`w-1.5 h-1.5 rounded-full transition-all ${i === idx ? 'bg-white' : 'bg-white/40'}`} />
+                className={`w-2 h-2 rounded-full transition-all ${i === idx ? 'bg-white scale-125' : 'bg-white/40'}`} />
             ))}
           </div>
-          <div className="absolute top-2 right-3 bg-black/50 rounded-full px-2 py-0.5 text-white text-xs">
+          <div className="absolute top-3 right-3 bg-black/50 rounded-full px-2.5 py-1 text-white text-xs font-medium">
             {idx + 1}/{files.length}
           </div>
         </>
@@ -61,31 +60,39 @@ function PhotoViewer({ files }) {
 function MemoryDetail({ memory, onClose }) {
   const isPhoto = memory.type === 'photo';
   const isVideo = memory.type === 'video';
+  const hasMedia = (isPhoto || isVideo) && memory.files.length > 0;
   const dateStr = new Date(memory.date || memory.created_at).toLocaleDateString('zh-TW', {
     year: 'numeric', month: 'long', day: 'numeric',
   });
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col" onClick={onClose}>
-      <div className="flex-shrink-0 bg-black/80 px-4 py-3 flex items-center justify-between" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 bg-black flex flex-col">
+      {/* Header */}
+      <div className="flex-shrink-0 bg-black/80 backdrop-blur-sm px-4 py-3 flex items-center justify-between">
         <span className="text-white/80 text-sm">{TYPE_ICONS[memory.type]} {dateStr}</span>
         <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-white text-xl">✕</button>
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-black" onClick={e => e.stopPropagation()}>
-        {isPhoto && memory.files.length > 0 && <PhotoViewer files={memory.files} />}
-        {isVideo && memory.files.length > 0 && (
-          <video src={memory.files[0]} controls className="w-full bg-black" playsInline />
-        )}
-        {memory.content && (
-          <div className="px-4 py-4">
-            <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">{memory.content}</p>
-          </div>
-        )}
-        {!memory.content && !isPhoto && !isVideo && (
-          <div className="px-4 py-8 text-center text-white/50 text-sm">無內容</div>
-        )}
-      </div>
+      {/* Media area — fills remaining space */}
+      {hasMedia && (
+        <div className={`${memory.content ? 'flex-1 min-h-0' : 'flex-1'}`}>
+          {isPhoto && <PhotoViewer files={memory.files} />}
+          {isVideo && (
+            <video src={memory.files[0]} controls className="w-full h-full object-contain bg-black" playsInline />
+          )}
+        </div>
+      )}
+
+      {/* Text caption pinned at bottom */}
+      {memory.content && (
+        <div className={`flex-shrink-0 px-4 py-4 ${hasMedia ? 'bg-black/80 backdrop-blur-sm max-h-40 overflow-y-auto border-t border-white/10' : 'flex-1 overflow-y-auto'}`}>
+          <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">{memory.content}</p>
+        </div>
+      )}
+
+      {!hasMedia && !memory.content && (
+        <div className="flex-1 flex items-center justify-center text-white/40 text-sm">無內容</div>
+      )}
     </div>
   );
 }
