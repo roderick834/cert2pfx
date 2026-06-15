@@ -5,10 +5,39 @@ const cors = require('cors');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
+const nodemailer = require('nodemailer');
 const db = require('./db');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'couples-secret-key-2024';
 const PORT = process.env.PORT || 3001;
+
+// Email transport — only active when SMTP_USER + SMTP_PASS are set
+const mailer = (process.env.SMTP_USER && process.env.SMTP_PASS)
+  ? nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    })
+  : null;
+
+async function sendCallEmail(toEmail, callerName, callType) {
+  if (!mailer) return;
+  try {
+    await mailer.sendMail({
+      from: `"Together 💕" <${process.env.SMTP_USER}>`,
+      to: toEmail,
+      subject: `${callerName} 正在呼叫你 ${callType === 'video' ? '📹' : '📞'}`,
+      html: `
+        <div style="font-family:sans-serif;max-width:480px;margin:auto">
+          <h2 style="color:#f43f5e">💕 Together</h2>
+          <p><strong>${callerName}</strong> 正在向你發起${callType === 'video' ? '視訊' : '語音'}通話！</p>
+          <p>請打開 App 接聽。</p>
+        </div>
+      `,
+    });
+  } catch (err) {
+    console.error('Email send failed:', err.message);
+  }
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -115,13 +144,19 @@ io.on('connection', (socket) => {
 
   // WebRTC signaling - relay signals between couple
   socket.on('call-user', (data) => {
-    const coupleId = getCoupleId(socket.user.id);
-    if (coupleId) {
-      socket.to(coupleId).emit('incoming-call', {
-        from: socket.user.username,
-        fromId: socket.user.id,
-        ...data
-      });
+    const userId = socket.user.id;
+    const coupleRow = db.prepare('SELECT * FROM couples WHERE user1_id = ? OR user2_id = ?').get(userId, userId);
+    if (!coupleRow) return;
+    socket.to(coupleRow.id).emit('incoming-call', {
+      from: socket.user.username,
+      fromId: userId,
+      ...data
+    });
+    // Email the partner if they're not actively connected
+    const partnerId = coupleRow.user1_id === userId ? coupleRow.user2_id : coupleRow.user1_id;
+    if (partnerId) {
+      const partner = db.prepare('SELECT email FROM users WHERE id = ?').get(partnerId);
+      if (partner?.email) sendCallEmail(partner.email, socket.user.username, data.callType);
     }
   });
 

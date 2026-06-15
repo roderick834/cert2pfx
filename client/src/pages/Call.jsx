@@ -1,201 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useSocket } from '../context/SocketContext';
-
-// STUN + free public TURN for NAT traversal on mobile networks
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-  ],
-};
+import { useCall } from '../context/CallContext';
 
 export default function Call() {
   const { couple } = useAuth();
-  const socket = useSocket();
-  const [status, setStatus] = useState('idle'); // idle | calling | incoming | connected
-  const [callType, setCallType] = useState('audio');
-  const [incomingData, setIncomingData] = useState(null);
-  const [callError, setCallError] = useState('');
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
-  const pcRef = useRef(null);
-  const localStreamRef = useRef(null);
-  // Buffer ICE candidates that arrive before remote description is set
-  const pendingCandidates = useRef([]);
-
-  const cleanup = () => {
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    localStreamRef.current = null;
-    pcRef.current?.close();
-    pcRef.current = null;
-    pendingCandidates.current = [];
-    if (localVideoRef.current) localVideoRef.current.srcObject = null;
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-    setStatus('idle');
-    setIncomingData(null);
-    setCallError('');
-  };
-
-  const drainCandidates = async () => {
-    while (pendingCandidates.current.length && pcRef.current) {
-      const c = pendingCandidates.current.shift();
-      try { await pcRef.current.addIceCandidate(new RTCIceCandidate(c)); } catch {}
-    }
-  };
-
-  useEffect(() => {
-    if (!socket || !couple) return;
-    socket.emit('join-couple-room', couple.couple.id);
-
-    const onIncoming = (data) => {
-      setIncomingData(data);
-      setCallType(data.callType || 'audio');
-      setStatus('incoming');
-    };
-
-    // Caller receives callee's answer
-    const onAnswered = async ({ answer }) => {
-      if (!pcRef.current) return;
-      try {
-        await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer));
-        await drainCandidates();
-        setStatus('connected');
-      } catch (e) {
-        console.error('setRemoteDescription(answer) failed:', e);
-      }
-    };
-
-    // ICE candidates — buffer if PC not ready yet
-    const onICE = async ({ candidate }) => {
-      if (!candidate) return;
-      if (!pcRef.current || !pcRef.current.remoteDescription) {
-        pendingCandidates.current.push(candidate);
-        return;
-      }
-      try { await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
-    };
-
-    const onEnded = () => cleanup();
-
-    socket.on('incoming-call', onIncoming);
-    socket.on('call-answered', onAnswered);
-    socket.on('webrtc-ice-candidate', onICE);
-    socket.on('call-ended', onEnded);
-
-    return () => {
-      socket.off('incoming-call', onIncoming);
-      socket.off('call-answered', onAnswered);
-      socket.off('webrtc-ice-candidate', onICE);
-      socket.off('call-ended', onEnded);
-    };
-  }, [socket, couple]);
-
-  const buildPC = (stream) => {
-    const pc = new RTCPeerConnection(ICE_SERVERS);
-    stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-
-    pc.ontrack = (e) => {
-      const stream = e.streams[0] || new MediaStream([e.track]);
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = stream;
-        // iOS Safari sometimes needs an explicit play() after srcObject is set
-        remoteVideoRef.current.play().catch(() => {});
-      }
-    };
-
-    pc.onicecandidate = (e) => {
-      if (e.candidate && socket) {
-        socket.emit('webrtc-ice-candidate', { candidate: e.candidate });
-      }
-    };
-
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed') {
-        setCallError('連線失敗，請重試');
-        cleanup();
-      }
-    };
-
-    return pc;
-  };
-
-  const getMedia = async (withVideo) => {
-    try {
-      return await navigator.mediaDevices.getUserMedia({ audio: true, video: withVideo });
-    } catch {
-      // Video permission denied — fall back to audio only
-      if (withVideo) return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      throw new Error('無法存取麥克風，請確認權限設定。');
-    }
-  };
-
-  const startCall = async (type) => {
-    if (!socket || !couple) return;
-    setCallError('');
-    setCallType(type);
-    setStatus('calling');
-    try {
-      const stream = await getMedia(type === 'video');
-      localStreamRef.current = stream;
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-
-      const pc = buildPC(stream);
-      pcRef.current = pc;
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('call-user', { offer, callType: type });
-    } catch (err) {
-      setCallError(err.message || '無法開始通話');
-      cleanup();
-    }
-  };
-
-  const answerCall = async () => {
-    if (!socket || !incomingData) return;
-    setCallError('');
-    try {
-      const stream = await getMedia(callType === 'video');
-      localStreamRef.current = stream;
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-
-      const pc = buildPC(stream);
-      pcRef.current = pc;
-
-      await pc.setRemoteDescription(new RTCSessionDescription(incomingData.offer));
-      await drainCandidates();
-
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit('answer-call', { answer });
-      setStatus('connected');
-    } catch (err) {
-      console.error('answerCall error:', err);
-      setCallError('接聽失敗，請重試');
-      cleanup();
-    }
-  };
-
-  const endCall = () => {
-    if (socket) socket.emit('end-call');
-    cleanup();
-  };
+  const {
+    status, callType, incomingData, callError, isSpeaker,
+    startCall, answerCall, endCall, toggleSpeaker,
+    localVideoRef, remoteVideoRef,
+  } = useCall();
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   if (!couple) {
     return (
@@ -206,17 +20,21 @@ export default function Call() {
     );
   }
 
+  const showVideo = status === 'connected' || status === 'calling';
+
   return (
     <div className="flex flex-col items-center min-h-[calc(100vh-8rem)] bg-gradient-to-b from-rose-50 to-white">
-      {/* Video area — always rendered so refs stay attached; hidden until in-call */}
+      {/* Video container — CSS-only fullscreen toggle so refs stay on the same elements */}
       <div
-        className="relative w-full bg-black"
-        style={{
-          height: (status === 'connected' || status === 'calling') ? '55vw' : 0,
-          maxHeight: (status === 'connected' || status === 'calling') ? 320 : 0,
-          overflow: 'hidden',
+        className={isFullscreen
+          ? 'fixed inset-0 z-50 bg-black'
+          : 'relative w-full bg-black overflow-hidden'}
+        style={isFullscreen ? undefined : {
+          height: showVideo ? '55vw' : 0,
+          maxHeight: showVideo ? 320 : 0,
           transition: 'height 0.2s',
         }}
+        onClick={() => showVideo && setIsFullscreen((f) => !f)}
       >
         <video
           ref={remoteVideoRef}
@@ -232,6 +50,19 @@ export default function Call() {
           muted
           className="absolute bottom-3 right-3 w-24 h-16 object-cover rounded-xl border-2 border-white shadow-lg bg-black"
         />
+        {showVideo && !isFullscreen && (
+          <div className="absolute bottom-3 left-3 bg-black/40 rounded-lg px-2 py-1 pointer-events-none">
+            <span className="text-white text-xs">點擊全螢幕</span>
+          </div>
+        )}
+        {isFullscreen && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
+            className="absolute top-10 right-4 w-10 h-10 bg-black/60 rounded-full flex items-center justify-center text-white text-xl font-bold z-10"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 gap-6 w-full">
@@ -302,9 +133,22 @@ export default function Call() {
         {status === 'connected' && (
           <div className="text-center space-y-4">
             <p className="text-green-500 font-semibold">通話中 ❤️</p>
-            <button onClick={endCall} className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center shadow-lg mx-auto">
-              <span className="text-2xl">📵</span>
-            </button>
+            <div className="flex gap-5 justify-center items-end">
+              <button onClick={toggleSpeaker} className="flex flex-col items-center gap-1">
+                <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                  isSpeaker ? 'bg-blue-500' : 'bg-gray-200'
+                }`}>
+                  <span className="text-2xl">{isSpeaker ? '🔊' : '🔈'}</span>
+                </div>
+                <span className="text-xs text-gray-500">{isSpeaker ? '擴音' : '聽筒'}</span>
+              </button>
+              <button onClick={endCall} className="flex flex-col items-center gap-1">
+                <div className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center shadow-lg">
+                  <span className="text-2xl">📵</span>
+                </div>
+                <span className="text-xs text-gray-500">掛斷</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
