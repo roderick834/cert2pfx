@@ -3,10 +3,10 @@ import { useAuth } from '../context/AuthContext';
 import { useCall } from '../context/CallContext';
 
 const navItems = [
-  { to: '/', icon: '🏠', label: '回憶' },
+  { to: '/', icon: '🏠', label: '首頁' },
+  { to: '/memories', icon: '📷', label: '回憶' },
   { to: '/chat', icon: '💬', label: '聊天' },
   { to: '/call', icon: '📞', label: '通話' },
-  { to: '/stickers', icon: '🎨', label: '貼圖' },
   { to: '/profile', icon: '💑', label: '我們' },
 ];
 

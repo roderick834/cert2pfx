@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Pairing from './pages/Pairing';
 import Home from './pages/Home';
+import Memories from './pages/Memories';
 import Chat from './pages/Chat';
 import Call from './pages/Call';
 import StickerMaker from './pages/StickerMaker';
@@ -45,6 +46,7 @@ function AppRoutes() {
       />
       <Route element={<RequireAuth />}>
         <Route path="/" element={<Home />} />
+        <Route path="/memories" element={<Memories />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/call" element={<Call />} />
         <Route path="/stickers" element={<StickerMaker />} />
