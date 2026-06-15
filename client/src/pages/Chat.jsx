@@ -162,18 +162,20 @@ export default function Chat() {
 
       {/* Sticker panel */}
       {showStickers && (
-        <div className="bg-white border-t border-rose-100 p-3 grid grid-cols-4 gap-2 max-h-40 overflow-y-auto">
+        <div className="bg-white border-t border-rose-100 px-3 pt-3 pb-2">
           {stickers.length === 0 ? (
-            <p className="col-span-4 text-center text-gray-400 text-sm py-4">
+            <p className="text-center text-gray-400 text-sm py-6">
               還沒有貼圖，去「貼圖」頁面建立吧！
             </p>
           ) : (
-            stickers.map((s) => (
-              <button key={s.id} onClick={() => sendSticker(s)}
-                className="aspect-square rounded-xl overflow-hidden hover:scale-105 transition-transform">
-                <img src={s.image_data} alt={s.name} className="w-full h-full object-contain" />
-              </button>
-            ))
+            <div className="grid grid-cols-4 gap-2.5 max-h-52 overflow-y-auto pb-1">
+              {stickers.map((s) => (
+                <button key={s.id} onClick={() => sendSticker(s)}
+                  className="aspect-square rounded-2xl bg-gray-50 active:scale-95 transition-transform p-1.5 flex items-center justify-center">
+                  <img src={s.image_data} alt={s.name} className="w-full h-full object-contain" />
+                </button>
+              ))}
+            </div>
           )}
         </div>
       )}
