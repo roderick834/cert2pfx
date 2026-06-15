@@ -24,7 +24,14 @@ export function AuthProvider({ children }) {
         return api.get('/couples/info');
       })
       .then((res) => setCouple(res.data))
-      .catch(() => {})
+      .catch((err) => {
+        // 401 or 404 means token is invalid or user was wiped (e.g. DB reset) — force logout
+        if (err.response?.status === 401 || err.response?.status === 404) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setUser(null);
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 

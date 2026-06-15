@@ -1,7 +1,8 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, 'couples.db');
+// DB_PATH can be overridden via env var so Railway Volume can persist it
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'couples.db');
 const db = new Database(DB_PATH);
 
 // Enable WAL mode for better performance
