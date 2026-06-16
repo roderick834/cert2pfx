@@ -34,6 +34,51 @@ export function CallProvider({ children }) {
   const remoteAudioRef = useRef(null);
   const localVideoEl = useRef(null);
   const remoteVideoEl = useRef(null);
+  const ringtoneRef = useRef(null);
+
+  const stopRingtone = () => {
+    ringtoneRef.current?.stop();
+    ringtoneRef.current = null;
+  };
+
+  const startRingtone = () => {
+    stopRingtone();
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    let ctx;
+    try { ctx = new Ctx(); } catch { return; }
+    let nextTime = ctx.currentTime + 0.05;
+    let stopped = false;
+    let timerId;
+    function drop(t, freq, amp) {
+      const osc = ctx.createOscillator();
+      const env = ctx.createGain();
+      osc.connect(env); env.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.65, t + 0.4);
+      env.gain.setValueAtTime(0.001, t);
+      env.gain.linearRampToValueAtTime(amp, t + 0.025);
+      env.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+      osc.start(t); osc.stop(t + 0.45);
+    }
+    function burst(t) {
+      drop(t + 0.00, 880, 0.22);
+      drop(t + 0.12, 1100, 0.28);
+      drop(t + 0.25, 1320, 0.32);
+      drop(t + 0.40, 1100, 0.24);
+      drop(t + 0.55, 880, 0.18);
+    }
+    function tick() {
+      if (stopped) return;
+      while (nextTime < ctx.currentTime + 0.5) { burst(nextTime); nextTime += 2.5; }
+      timerId = setTimeout(tick, 200);
+    }
+    ctx.resume().then(tick).catch(() => {});
+    ringtoneRef.current = {
+      stop() { stopped = true; clearTimeout(timerId); try { ctx.close(); } catch {} },
+    };
+  };
 
   useEffect(() => {
     const el = document.createElement('audio');
@@ -87,6 +132,7 @@ export function CallProvider({ children }) {
       remoteAudioRef.current.srcObject = null;
       remoteAudioRef.current.muted = false;
     }
+    stopRingtone();
     setStatus('idle');
     setIncomingData(null);
     setCallError('');
@@ -108,6 +154,7 @@ export function CallProvider({ children }) {
       setIncomingData(data);
       setCallType(data.callType || 'audio');
       setStatus('incoming');
+      startRingtone();
     };
 
     const onAnswered = async ({ answer }) => {
@@ -184,6 +231,7 @@ export function CallProvider({ children }) {
       remoteAudioRef.current.play().then(() => { if (remoteAudioRef.current) remoteAudioRef.current.pause(); }).catch(() => {});
     }
     setStatus('calling');
+    startRingtone();
     try {
       const stream = await getMedia(type === 'video');
       localStreamRef.current = stream;
@@ -201,6 +249,7 @@ export function CallProvider({ children }) {
   const answerCall = async () => {
     if (!socket || !incomingData) return;
     setCallError('');
+    stopRingtone();
     // Unlock audio element in user-gesture context before any await (iOS Safari requires this)
     if (remoteAudioRef.current) {
       remoteAudioRef.current.play().then(() => { if (remoteAudioRef.current) remoteAudioRef.current.pause(); }).catch(() => {});

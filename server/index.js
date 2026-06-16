@@ -178,9 +178,7 @@ function isUserOnline(userId) {
   return [...io.sockets.sockets.values()].some(s => s.user?.id === userId);
 }
 
-function sendPush(userId, payload) {
-  // Don't push if user is actively connected — they get real-time updates
-  if (isUserOnline(userId)) return;
+function _sendPushRaw(userId, payload) {
   const subs = db.prepare('SELECT subscription FROM push_subscriptions WHERE user_id = ?').all(userId);
   const body = JSON.stringify(payload);
   subs.forEach(({ subscription }) => {
@@ -191,6 +189,17 @@ function sendPush(userId, payload) {
       }
     });
   });
+}
+
+function sendPush(userId, payload) {
+  // Don't push if user is actively connected — they get real-time updates
+  if (isUserOnline(userId)) return;
+  _sendPushRaw(userId, payload);
+}
+
+// For calls: always push even if online (app may be backgrounded)
+function sendCallPush(userId, payload) {
+  _sendPushRaw(userId, payload);
 }
 
 io.on('connection', (socket) => {
@@ -268,9 +277,10 @@ io.on('connection', (socket) => {
     if (partnerId) {
       const partner = db.prepare('SELECT email FROM users WHERE id = ?').get(partnerId);
       if (partner?.email) sendCallEmail(partner.email, socket.user.username, data.callType);
-      // Push notification for incoming call
+      // Push notification for incoming call — always send even if partner is online
+      // (app may be backgrounded so they'd miss the socket event)
       const callBody = data.callType === 'video' ? '點擊接聽視訊通話' : '點擊接聽語音通話';
-      sendPush(partnerId, { title: `📞 ${socket.user.username} 正在呼叫你`, body: callBody, tag: 'call', url: '/call' });
+      sendCallPush(partnerId, { title: `📞 ${socket.user.username} 正在呼叫你`, body: callBody, tag: 'call', url: '/call' });
       sendNtfy(partnerId, `📞 ${socket.user.username} 正在呼叫你`, callBody, 'telephone_receiver');
     }
   });
