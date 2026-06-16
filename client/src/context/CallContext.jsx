@@ -261,10 +261,10 @@ export function CallProvider({ children }) {
   const startCall = async (type) => {
     if (!socket || !couple) return;
     setCallError(''); setCallType(type);
-    // Unlock both audio elements in user-gesture context before any await (iOS Safari)
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.play().then(() => { if (remoteAudioRef.current) remoteAudioRef.current.pause(); }).catch(() => {});
-    }
+    // Unlock ringtone in user-gesture context so it can play later (iOS Safari).
+    // Do NOT pre-play remoteAudioRef here — playing it in a gesture handler locks
+    // iOS into "media playback" speaker routing; instead let it play via autoplay
+    // when the stream arrives (iOS exempts WebRTC streams from autoplay blocking).
     if (ringtoneAudioRef.current) {
       ringtoneAudioRef.current.play().then(() => { if (ringtoneAudioRef.current) ringtoneAudioRef.current.pause(); }).catch(() => {});
     }
@@ -288,10 +288,8 @@ export function CallProvider({ children }) {
     if (!socket || !incomingData) return;
     setCallError('');
     stopRingtone();
-    // Unlock audio elements in user-gesture context before any await (iOS Safari)
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.play().then(() => { if (remoteAudioRef.current) remoteAudioRef.current.pause(); }).catch(() => {});
-    }
+    // Do NOT pre-play remoteAudioRef here — same reason as startCall:
+    // gesture-context play locks iOS into speaker routing for that element.
     try {
       const stream = await getMedia(callType === 'video');
       localStreamRef.current = stream;
@@ -323,24 +321,28 @@ export function CallProvider({ children }) {
     setIsSpeaker(next);
 
     if (next) {
-      // Speaker: AudioContext forces audio to loudspeaker
+      // Speaker: mute <audio> first, then AudioContext routes to loudspeaker
+      audioEl.muted = true;
       if (!audioCtxRef.current) {
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (Ctx) {
           const ctx = new Ctx();
-          const src = ctx.createMediaStreamSource(stream);
-          src.connect(ctx.destination);
+          ctx.createMediaStreamSource(stream).connect(ctx.destination);
           audioCtxRef.current = ctx;
-          audioEl.muted = true; // AudioContext handles output now
         }
       }
     } else {
-      // Earpiece: close AudioContext, let hidden video element route to earpiece
+      // Earpiece: close AudioContext, then null-reset srcObject so iOS
+      // re-evaluates AVAudioSession output port (earpiece in playAndRecord mode).
       if (audioCtxRef.current) {
-        audioCtxRef.current.close();
+        try { await audioCtxRef.current.close(); } catch {}
         audioCtxRef.current = null;
       }
       audioEl.muted = false;
+      audioEl.pause();
+      audioEl.srcObject = null;
+      // Brief gap lets iOS commit the routing change before we re-attach stream
+      await new Promise(r => setTimeout(r, 80));
       audioEl.srcObject = stream;
       audioEl.play().catch(() => {});
     }
