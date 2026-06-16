@@ -8,49 +8,54 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 
-const supported = typeof window !== 'undefined'
+// Only require serviceWorker + Notification — PushManager checked dynamically
+// because Safari exposes it on registration, not on window
+const basicSupport = typeof window !== 'undefined'
   && 'serviceWorker' in navigator
-  && 'PushManager' in window
   && 'Notification' in window;
 
 export function usePush(user) {
-  const [status, setStatus] = useState('idle'); // 'idle' | 'granted' | 'denied' | 'unsupported'
+  const [status, setStatus] = useState('idle'); // idle | granted | denied | unsupported
 
-  // Register service worker silently on load (no permission prompt)
   useEffect(() => {
-    if (!user || !supported) { setStatus('unsupported'); return; }
+    if (!user || !basicSupport) { setStatus('unsupported'); return; }
     navigator.serviceWorker.register('/sw.js').catch(() => {});
-    setStatus(Notification.permission === 'granted' ? 'granted' : Notification.permission === 'denied' ? 'denied' : 'idle');
+    const p = Notification.permission;
+    if (p === 'granted') setStatus('granted');
+    else if (p === 'denied') setStatus('denied');
+    else setStatus('idle');
   }, [user]);
 
-  // Re-subscribe if already granted (e.g. after page refresh)
+  // Re-upload existing subscription after page refresh
   useEffect(() => {
     if (status !== 'granted' || !user) return;
     (async () => {
       try {
         const reg = await navigator.serviceWorker.ready;
+        if (!reg.pushManager) return;
         const existing = await reg.pushManager.getSubscription();
-        if (existing) {
-          await api.post('/push/subscribe', existing.toJSON()).catch(() => {});
-          return;
+        if (existing) await api.post('/push/subscribe', existing.toJSON()).catch(() => {});
+        else {
+          const { data } = await api.get('/push/vapid-public-key');
+          const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(data.key),
+          });
+          await api.post('/push/subscribe', sub.toJSON());
         }
-        const { data } = await api.get('/push/vapid-public-key');
-        const sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(data.key),
-        });
-        await api.post('/push/subscribe', sub.toJSON());
       } catch {}
     })();
   }, [status, user]);
 
-  // Called from a button click (user gesture required by browsers)
   const requestPermission = useCallback(async () => {
-    if (!supported) return 'unsupported';
+    if (!basicSupport) return 'unsupported';
     try {
       const reg = await navigator.serviceWorker.ready;
+      if (!reg.pushManager) { setStatus('unsupported'); return 'unsupported'; }
+
       const perm = await Notification.requestPermission();
       if (perm !== 'granted') { setStatus('denied'); return perm; }
+
       const { data } = await api.get('/push/vapid-public-key');
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -65,5 +70,5 @@ export function usePush(user) {
     }
   }, []);
 
-  return { status, requestPermission, supported };
+  return { status, requestPermission, supported: basicSupport };
 }

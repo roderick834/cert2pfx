@@ -254,13 +254,13 @@ export default function Profile() {
             <div>
               <p className="text-sm font-medium text-gray-700">瀏覽器推播</p>
               <p className="text-xs text-gray-400 mt-0.5">
-                {!pushSupported ? 'iOS 需 16.4+ 才支援' :
-                  pushStatus === 'granted' ? '✅ 已開啟' :
+                {pushStatus === 'granted' ? '✅ 已開啟' :
                   pushStatus === 'denied' ? '已拒絕（請到系統設定開啟）' :
-                  'Chrome / 新版 Safari'}
+                  pushStatus === 'unsupported' ? '此裝置不支援' :
+                  'Chrome / Safari（iOS 16.4+）'}
               </p>
             </div>
-            {pushSupported && pushStatus !== 'granted' && pushStatus !== 'denied' && (
+            {pushStatus === 'idle' && (
               <button onClick={handleEnablePush} disabled={pushLoading}
                 className="bg-rose-500 text-white text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-60">
                 {pushLoading ? '開啟中...' : '開啟'}
