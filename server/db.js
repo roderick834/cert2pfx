@@ -113,6 +113,25 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 
+  CREATE TABLE IF NOT EXISTS albums (
+    id TEXT PRIMARY KEY,
+    couple_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (couple_id) REFERENCES couples(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS album_files (
+    id TEXT PRIMARY KEY,
+    album_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    order_num INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (album_id) REFERENCES albums(id)
+  );
+
   CREATE TABLE IF NOT EXISTS device_tokens (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,

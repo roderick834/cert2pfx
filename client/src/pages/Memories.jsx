@@ -22,6 +22,8 @@ function groupByDate(memories) {
   return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
 }
 
+// ── Memory components ───────────────────────────────────────────
+
 function PhotoViewer({ files }) {
   const [idx, setIdx] = useState(0);
   const touchX = useRef(null);
@@ -92,9 +94,7 @@ function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
     try {
       const fd = new FormData();
       picked.forEach(f => fd.append('files', f));
-      const res = await api.post(`/memories/${memory.id}/files`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await api.post(`/memories/${memory.id}/files`, fd);
       setLocalFiles(res.data.files);
       onUpdate({ ...memory, content: editContent, date: editDate, files: res.data.files });
     } catch {}
@@ -200,7 +200,6 @@ function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
   );
 }
 
-// Between-style memory card
 function MemoryCard({ memory, user, onClick }) {
   const [liked, setLiked] = useState(
     () => JSON.parse(localStorage.getItem('liked_memories') || '[]').includes(memory.id)
@@ -219,7 +218,6 @@ function MemoryCard({ memory, user, onClick }) {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden animate-fade-in" onClick={onClick}>
-      {/* Photo/video */}
       {thumb && memory.type === 'photo' && (
         <img src={thumb} alt="" className="w-full object-cover" style={{ maxHeight: 320, minHeight: 160 }} />
       )}
@@ -229,10 +227,7 @@ function MemoryCard({ memory, user, onClick }) {
           <span className="text-xs text-gray-400 mt-1">點擊播放</span>
         </div>
       )}
-
-      {/* Content */}
       <div className="px-4 pt-3 pb-1">
-        {/* Avatar + name row */}
         <div className="flex items-center gap-2 mb-2">
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden">
             {memory.avatar
@@ -244,14 +239,10 @@ function MemoryCard({ memory, user, onClick }) {
             <span className="ml-auto text-xs text-gray-400">{memory.files.length} 張</span>
           )}
         </div>
-
-        {/* Caption */}
         {memory.content && (
           <p className="text-gray-600 text-sm leading-snug line-clamp-3 mb-2">{memory.content}</p>
         )}
       </div>
-
-      {/* Action bar */}
       <div className="flex items-center gap-1 px-3 py-2 border-t border-gray-50">
         <button onClick={toggleLike}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all ${liked ? 'text-rose-500 bg-rose-50' : 'text-gray-400 hover:text-rose-400 hover:bg-rose-50'}`}>
@@ -270,8 +261,319 @@ function MemoryCard({ memory, user, onClick }) {
   );
 }
 
+// ── Album components ────────────────────────────────────────────
+
+function AlbumFullViewer({ files, startIdx, onClose }) {
+  const [idx, setIdx] = useState(startIdx || 0);
+  const touchX = useRef(null);
+  const prev = () => setIdx(i => Math.max(0, i - 1));
+  const next = () => setIdx(i => Math.min(files.length - 1, i + 1));
+  const onTouchStart = (e) => { touchX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e) => {
+    if (touchX.current === null) return;
+    const diff = touchX.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 40) diff > 0 ? next() : prev();
+    touchX.current = null;
+  };
+  return (
+    <div className="fixed inset-0 z-[60] bg-black flex flex-col"
+      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-black/70 backdrop-blur-sm">
+        <span className="text-white/60 text-sm">{idx + 1} / {files.length}</span>
+        <button onClick={onClose} className="text-white text-2xl w-9 h-9 flex items-center justify-center">✕</button>
+      </div>
+      <div className="flex-1 relative">
+        <img src={files[idx]} alt="" className="absolute inset-0 w-full h-full object-contain" />
+        {idx > 0 && (
+          <button onClick={prev}
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 text-white text-xl flex items-center justify-center">‹</button>
+        )}
+        {idx < files.length - 1 && (
+          <button onClick={next}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 text-white text-xl flex items-center justify-center">›</button>
+        )}
+      </div>
+      <div className="flex-shrink-0 flex gap-1.5 py-3 bg-black/70 overflow-x-auto px-4">
+        {files.map((f, i) => (
+          <button key={i} onClick={() => setIdx(i)}
+            className={`flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${i === idx ? 'border-white' : 'border-transparent opacity-50'}`}>
+            <img src={f} alt="" className="w-full h-full object-cover" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AlbumDetail({ album, onClose, onAlbumUpdate, onAlbumDelete }) {
+  const [files, setFiles] = useState(album.files || []);
+  const [viewerIdx, setViewerIdx] = useState(null);
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState(album.name);
+  const [renaming, setRenaming] = useState(false);
+  const [addingFiles, setAddingFiles] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const addFileRef = useRef();
+
+  const handleRename = async () => {
+    if (!newName.trim()) return;
+    setRenaming(true);
+    try {
+      await api.patch(`/albums/${album.id}`, { name: newName.trim() });
+      onAlbumUpdate({ ...album, name: newName.trim(), files });
+      setEditingName(false);
+    } catch {}
+    setRenaming(false);
+  };
+
+  const handleAddFiles = async (e) => {
+    const picked = Array.from(e.target.files);
+    if (!picked.length) return;
+    setAddingFiles(true);
+    try {
+      const fd = new FormData();
+      picked.forEach(f => fd.append('files', f));
+      const res = await api.post(`/albums/${album.id}/files`, fd);
+      setFiles(res.data.files);
+      onAlbumUpdate({ ...album, files: res.data.files, count: res.data.files.length, cover: res.data.files[0] || null });
+    } catch {}
+    setAddingFiles(false);
+    e.target.value = '';
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/albums/${album.id}`);
+      onAlbumDelete(album.id);
+      onClose();
+    } catch {}
+    setDeleting(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-rose-50 flex flex-col">
+      {/* Header */}
+      <div className="flex-shrink-0 bg-white border-b border-rose-100 px-4 py-3 flex items-center gap-3">
+        <button onClick={onClose} className="text-rose-500 text-2xl w-8 h-8 flex items-center justify-center">‹</button>
+        {editingName ? (
+          <input
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            className="flex-1 border border-rose-300 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+            autoFocus
+          />
+        ) : (
+          <h2 className="flex-1 text-base font-bold text-gray-800 truncate">{album.name}</h2>
+        )}
+        {editingName ? (
+          <div className="flex gap-2">
+            <button onClick={() => { setEditingName(false); setNewName(album.name); }}
+              className="text-sm text-gray-400 px-2 py-1.5">取消</button>
+            <button onClick={handleRename} disabled={renaming}
+              className="text-sm bg-rose-500 text-white px-3 py-1.5 rounded-xl disabled:opacity-60">
+              {renaming ? '儲存...' : '儲存'}
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setEditingName(true)} className="text-xl px-1">✏️</button>
+        )}
+      </div>
+
+      {/* Sub-header: count + actions */}
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 bg-white border-b border-rose-50">
+        <span className="text-xs text-gray-400">{files.length} 張照片</span>
+        <div className="flex items-center gap-4">
+          <button onClick={() => addFileRef.current.click()} disabled={addingFiles}
+            className="text-sm text-rose-500 font-medium disabled:opacity-50">
+            {addingFiles ? '上傳中...' : '＋ 新增'}
+          </button>
+          <input ref={addFileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleAddFiles} />
+          {!confirmDelete ? (
+            <button onClick={() => setConfirmDelete(true)} className="text-sm text-red-400">刪除相簿</button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button onClick={() => setConfirmDelete(false)} className="text-sm text-gray-400">取消</button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="text-sm text-white bg-red-500 px-3 py-1 rounded-lg disabled:opacity-60">
+                {deleting ? '刪除中...' : '確定'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 3-col photo grid */}
+      <div className="flex-1 overflow-y-auto">
+        {files.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center px-8 py-16">
+            <div className="text-5xl mb-3">🖼️</div>
+            <p className="text-gray-400 text-sm">相簿裡還沒有照片</p>
+            <button onClick={() => addFileRef.current.click()}
+              className="mt-4 bg-rose-500 text-white text-sm font-semibold px-5 py-2 rounded-full">
+              新增照片
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-0.5 p-0.5">
+            {files.map((f, i) => (
+              <button key={i} onClick={() => setViewerIdx(i)}
+                className="aspect-square overflow-hidden bg-gray-100 active:opacity-80 transition-opacity">
+                <img src={f} alt="" className="w-full h-full object-cover" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {viewerIdx !== null && (
+        <AlbumFullViewer files={files} startIdx={viewerIdx} onClose={() => setViewerIdx(null)} />
+      )}
+    </div>
+  );
+}
+
+function AlbumCard({ album, onClick }) {
+  return (
+    <button onClick={onClick}
+      className="bg-white rounded-2xl shadow-sm overflow-hidden text-left w-full active:scale-[0.98] transition-transform">
+      <div className="aspect-square bg-gray-100 overflow-hidden">
+        {album.cover
+          ? <img src={album.cover} alt="" className="w-full h-full object-cover" />
+          : <div className="w-full h-full flex items-center justify-center">
+              <span className="text-4xl text-gray-300">🖼️</span>
+            </div>
+        }
+      </div>
+      <div className="px-3 py-2.5">
+        <p className="text-sm font-semibold text-gray-800 truncate">{album.name}</p>
+        <p className="text-xs text-gray-400 mt-0.5">{album.count} 張照片</p>
+      </div>
+    </button>
+  );
+}
+
+function AlbumsTab({ triggerNew }) {
+  const [albums, setAlbums] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newFiles, setNewFiles] = useState([]);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [selectedAlbum, setSelectedAlbum] = useState(null);
+  const fileRef = useRef();
+
+  useEffect(() => {
+    api.get('/albums')
+      .then(r => setAlbums(r.data.albums))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (triggerNew > 0) setShowForm(true);
+  }, [triggerNew]);
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    setCreateError(''); setCreating(true);
+    try {
+      const fd = new FormData();
+      fd.append('name', newName.trim());
+      newFiles.forEach(f => fd.append('files', f));
+      const res = await api.post('/albums', fd);
+      setAlbums(prev => [res.data.album, ...prev]);
+      setShowForm(false); setNewName(''); setNewFiles([]);
+    } catch (err) {
+      setCreateError(err.response?.data?.error || '建立失敗');
+    } finally { setCreating(false); }
+  };
+
+  const handleAlbumUpdate = (updated) => {
+    setAlbums(prev => prev.map(a => a.id === updated.id ? { ...a, ...updated } : a));
+    setSelectedAlbum(updated);
+  };
+
+  const handleAlbumDelete = (id) => {
+    setAlbums(prev => prev.filter(a => a.id !== id));
+    setSelectedAlbum(null);
+  };
+
+  if (loading) return <div className="text-center py-12 text-gray-400">載入中...</div>;
+
+  return (
+    <div className="pb-4 pt-3">
+      {showForm && (
+        <div className="mx-4 mb-4 bg-white rounded-2xl shadow-sm p-4 animate-fade-in">
+          <form onSubmit={handleCreate} className="space-y-3">
+            {createError && <div className="bg-red-50 text-red-600 rounded-xl px-3 py-2 text-sm">{createError}</div>}
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">相簿名稱</label>
+              <input
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                placeholder="輸入相簿名稱..."
+                className="w-full border border-rose-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+                autoFocus
+              />
+            </div>
+            <button type="button" onClick={() => fileRef.current.click()}
+              className="w-full border-2 border-dashed border-rose-200 rounded-xl py-3 text-center text-sm hover:bg-rose-50 transition-colors">
+              {newFiles.length > 0
+                ? <span className="text-rose-500 font-medium">已選擇 {newFiles.length} 張照片</span>
+                : <span className="text-gray-400">＋ 新增照片（選填）</span>}
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
+              onChange={e => setNewFiles(Array.from(e.target.files))} />
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { setShowForm(false); setNewName(''); setNewFiles([]); }}
+                className="flex-1 border border-gray-200 text-gray-500 py-2.5 rounded-xl text-sm">取消</button>
+              <button type="submit" disabled={creating || !newName.trim()}
+                className="flex-1 bg-rose-500 text-white font-semibold py-2.5 rounded-xl text-sm disabled:opacity-60">
+                {creating ? '建立中...' : '建立相簿'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {albums.length === 0 && !showForm ? (
+        <div className="text-center py-16 px-8">
+          <div className="text-5xl mb-3">📁</div>
+          <p className="text-gray-400 text-sm">還沒有相簿，建立第一個吧！</p>
+          <button onClick={() => setShowForm(true)}
+            className="mt-4 bg-rose-500 text-white text-sm font-semibold px-5 py-2 rounded-full">
+            新增相簿
+          </button>
+        </div>
+      ) : (
+        <div className="px-4 grid grid-cols-2 gap-3">
+          {albums.map(a => (
+            <AlbumCard key={a.id} album={a} onClick={() => setSelectedAlbum(a)} />
+          ))}
+        </div>
+      )}
+
+      {selectedAlbum && (
+        <AlbumDetail
+          album={selectedAlbum}
+          onClose={() => setSelectedAlbum(null)}
+          onAlbumUpdate={handleAlbumUpdate}
+          onAlbumDelete={handleAlbumDelete}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Main Memories page ──────────────────────────────────────────
+
 export default function Memories() {
   const { user, couple } = useAuth();
+  const [tab, setTab] = useState('timeline');
   const [memories, setMemories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -282,6 +584,7 @@ export default function Memories() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
+  const [albumNewTrigger, setAlbumNewTrigger] = useState(0);
   const fileRef = useRef();
 
   useEffect(() => {
@@ -300,7 +603,7 @@ export default function Memories() {
       fd.append('type', type); fd.append('date', date);
       if (content) fd.append('content', content);
       files.forEach(f => fd.append('files', f));
-      const r = await api.post('/memories', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const r = await api.post('/memories', fd);
       setMemories([r.data.memory, ...memories]);
       setShowForm(false); setContent(''); setFiles([]); setType('text');
       setDate(new Date().toISOString().split('T')[0]);
@@ -332,90 +635,117 @@ export default function Memories() {
 
   return (
     <div className="pb-4">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-3 sticky top-0 bg-rose-50 z-10">
-        <h2 className="text-base font-bold text-rose-700">我們的回憶</h2>
-        <button onClick={() => setShowForm(!showForm)}
-          className="bg-rose-500 text-white text-sm font-semibold px-4 py-1.5 rounded-full shadow-sm">
-          {showForm ? '✕ 取消' : '+ 新增'}
-        </button>
-      </div>
-
-      {/* New memory form */}
-      {showForm && (
-        <div className="mx-4 bg-white rounded-2xl shadow-sm p-4 mb-4 animate-fade-in">
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {error && <div className="bg-red-50 text-red-600 rounded-xl px-3 py-2 text-sm">{error}</div>}
-            <div className="flex gap-2">
-              {['text', 'photo', 'video'].map(t => (
-                <button key={t} type="button" onClick={() => { setType(t); setFiles([]); }}
-                  className={`flex-1 py-1.5 rounded-xl text-sm font-medium ${type === t ? 'bg-rose-500 text-white' : 'bg-rose-50 text-rose-400'}`}>
-                  {TYPE_ICONS[t]} {TYPE_LABELS[t]}
-                </button>
-              ))}
-            </div>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)}
-              className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300" />
-            {type === 'text' ? (
-              <textarea required value={content} onChange={e => setContent(e.target.value)}
-                rows={4} placeholder="寫下這個回憶..."
-                className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 resize-none" />
-            ) : (
-              <>
-                <textarea value={content} onChange={e => setContent(e.target.value)}
-                  rows={2} placeholder="附上說明（選填）"
-                  className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 resize-none" />
-                <div onClick={() => fileRef.current.click()}
-                  className="border-2 border-dashed border-rose-200 rounded-xl p-4 text-center cursor-pointer hover:bg-rose-50 transition-colors">
-                  {files.length > 0
-                    ? <span className="text-rose-500 text-sm font-medium">已選擇 {files.length} 個{type === 'photo' ? '圖片' : '影片'}</span>
-                    : <span className="text-gray-400 text-sm">點擊選擇{type === 'photo' ? '圖片（可多選）' : '影片'}</span>}
-                </div>
-                <input ref={fileRef} type="file"
-                  accept={type === 'photo' ? 'image/*' : 'video/*'}
-                  multiple={type === 'photo'}
-                  className="hidden"
-                  onChange={e => setFiles(Array.from(e.target.files))} />
-              </>
-            )}
-            <button type="submit" disabled={submitting}
-              className="w-full bg-rose-500 text-white font-semibold py-2.5 rounded-xl disabled:opacity-60 text-sm">
-              {submitting ? '上傳中...' : '儲存回憶 ❤️'}
+      {/* Sticky header + tab bar */}
+      <div className="sticky top-0 bg-rose-50 z-10">
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <h2 className="text-base font-bold text-rose-700">我們的回憶</h2>
+          {tab === 'timeline' && (
+            <button onClick={() => setShowForm(f => !f)}
+              className="bg-rose-500 text-white text-sm font-semibold px-4 py-1.5 rounded-full shadow-sm">
+              {showForm ? '✕ 取消' : '+ 新增'}
             </button>
-          </form>
+          )}
+          {tab === 'albums' && (
+            <button onClick={() => setAlbumNewTrigger(n => n + 1)}
+              className="bg-rose-500 text-white text-sm font-semibold px-4 py-1.5 rounded-full shadow-sm">
+              + 新增相簿
+            </button>
+          )}
         </div>
-      )}
-
-      {/* Content */}
-      {loading ? (
-        <div className="text-center py-12 text-gray-400">載入中...</div>
-      ) : memories.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="text-5xl mb-3">📸</div>
-          <p className="text-gray-400 text-sm">還沒有回憶，快去新增第一個吧！</p>
-        </div>
-      ) : (
-        <div className="space-y-6 px-4">
-          {grouped.map(([date, items]) => (
-            <div key={date}>
-              {/* Date section header */}
-              <div className="flex items-center gap-3 mb-3">
-                <div className="flex-1 h-px bg-gray-200" />
-                <span className="text-xs text-gray-400 font-medium whitespace-nowrap">
-                  {formatDateHeader(date)}
-                </span>
-                <div className="flex-1 h-px bg-gray-200" />
-              </div>
-              {/* Cards for this date */}
-              <div className="space-y-3">
-                {items.map(m => (
-                  <MemoryCard key={m.id} memory={m} user={user} onClick={() => setSelected(m)} />
-                ))}
-              </div>
-            </div>
+        <div className="flex border-b border-rose-100 px-4">
+          {[['timeline', '時間軸'], ['albums', '相簿']].map(([id, label]) => (
+            <button key={id} onClick={() => setTab(id)}
+              className={`flex-1 py-2.5 text-sm font-semibold transition-colors relative ${
+                tab === id ? 'text-rose-500' : 'text-gray-400'
+              }`}>
+              {label}
+              {tab === id && (
+                <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-rose-500 rounded-full" />
+              )}
+            </button>
           ))}
         </div>
+      </div>
+
+      {/* ── Timeline tab ── */}
+      {tab === 'timeline' && (
+        <>
+          {showForm && (
+            <div className="mx-4 bg-white rounded-2xl shadow-sm p-4 mb-4 mt-3 animate-fade-in">
+              <form onSubmit={handleSubmit} className="space-y-3">
+                {error && <div className="bg-red-50 text-red-600 rounded-xl px-3 py-2 text-sm">{error}</div>}
+                <div className="flex gap-2">
+                  {['text', 'photo', 'video'].map(t => (
+                    <button key={t} type="button" onClick={() => { setType(t); setFiles([]); }}
+                      className={`flex-1 py-1.5 rounded-xl text-sm font-medium ${type === t ? 'bg-rose-500 text-white' : 'bg-rose-50 text-rose-400'}`}>
+                      {TYPE_ICONS[t]} {TYPE_LABELS[t]}
+                    </button>
+                  ))}
+                </div>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                  className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300" />
+                {type === 'text' ? (
+                  <textarea required value={content} onChange={e => setContent(e.target.value)}
+                    rows={4} placeholder="寫下這個回憶..."
+                    className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 resize-none" />
+                ) : (
+                  <>
+                    <textarea value={content} onChange={e => setContent(e.target.value)}
+                      rows={2} placeholder="附上說明（選填）"
+                      className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 resize-none" />
+                    <div onClick={() => fileRef.current.click()}
+                      className="border-2 border-dashed border-rose-200 rounded-xl p-4 text-center cursor-pointer hover:bg-rose-50 transition-colors">
+                      {files.length > 0
+                        ? <span className="text-rose-500 text-sm font-medium">已選擇 {files.length} 個{type === 'photo' ? '圖片' : '影片'}</span>
+                        : <span className="text-gray-400 text-sm">點擊選擇{type === 'photo' ? '圖片（可多選）' : '影片'}</span>}
+                    </div>
+                    <input ref={fileRef} type="file"
+                      accept={type === 'photo' ? 'image/*' : 'video/*'}
+                      multiple={type === 'photo'}
+                      className="hidden"
+                      onChange={e => setFiles(Array.from(e.target.files))} />
+                  </>
+                )}
+                <button type="submit" disabled={submitting}
+                  className="w-full bg-rose-500 text-white font-semibold py-2.5 rounded-xl disabled:opacity-60 text-sm">
+                  {submitting ? '上傳中...' : '儲存回憶 ❤️'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="text-center py-12 text-gray-400">載入中...</div>
+          ) : memories.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="text-5xl mb-3">📸</div>
+              <p className="text-gray-400 text-sm">還沒有回憶，快去新增第一個吧！</p>
+            </div>
+          ) : (
+            <div className="space-y-6 px-4 pt-3">
+              {grouped.map(([date, items]) => (
+                <div key={date}>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex-1 h-px bg-gray-200" />
+                    <span className="text-xs text-gray-400 font-medium whitespace-nowrap">
+                      {formatDateHeader(date)}
+                    </span>
+                    <div className="flex-1 h-px bg-gray-200" />
+                  </div>
+                  <div className="space-y-3">
+                    {items.map(m => (
+                      <MemoryCard key={m.id} memory={m} user={user} onClick={() => setSelected(m)} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
+
+      {/* ── Albums tab ── */}
+      {tab === 'albums' && <AlbumsTab triggerNew={albumNewTrigger} />}
 
       {selected && (
         <MemoryDetail

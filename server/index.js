@@ -70,6 +70,7 @@ app.use('/api/messages', require('./routes/messages'));
 app.use('/api/dates', require('./routes/dates'));
 app.use('/api/notes', require('./routes/notes'));
 app.use('/api/push', require('./routes/push'));
+app.use('/api/albums', require('./routes/albums'));
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
