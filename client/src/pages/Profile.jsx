@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePushContext } from '../App';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import InstallPrompt from '../components/InstallPrompt';
+import ImageCropTool from '../components/ImageCropTool';
 import api from '../api';
 
 export default function Profile() {
@@ -64,20 +66,28 @@ export default function Profile() {
   const avatarUrl = user?.avatar || null;
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [avatarError, setAvatarError] = useState('');
+  const [cropAvatarFile, setCropAvatarFile] = useState(null);
 
-  const handleAvatarUpload = async (e) => {
+  const handleAvatarUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setCropAvatarFile(file);
+    e.target.value = '';
+  };
+
+  const handleAvatarCropSave = async (dataUrl) => {
+    setCropAvatarFile(null);
     setAvatarLoading(true);
     setAvatarError('');
     try {
+      const fetchRes = await fetch(dataUrl);
+      const blob = await fetchRes.blob();
       const fd = new FormData();
-      fd.append('avatar', file);
-      // Do NOT manually set Content-Type — axios sets it with boundary automatically for FormData
-      const res = await api.post('/auth/avatar', fd);
+      fd.append('avatar', blob, 'avatar.jpg');
+      const res = await api.post('/auth/avatar', fd, { timeout: 120000 });
       if (res.data?.user?.avatar) {
         updateUser({ avatar: res.data.user.avatar });
-        refreshCouple(); // refresh couple.me.avatar so Home page shows the new photo
+        refreshCouple();
       } else {
         setAvatarError('上傳成功但路徑錯誤');
       }
@@ -85,7 +95,6 @@ export default function Profile() {
       setAvatarError(err.response?.data?.error || '上傳失敗，請重試');
     }
     setAvatarLoading(false);
-    e.target.value = '';
   };
 
   useEffect(() => {
@@ -523,6 +532,15 @@ export default function Profile() {
         className="w-full border-2 border-red-200 text-red-400 hover:bg-red-50 font-semibold py-3 rounded-xl transition-all text-sm">
         登出
       </button>
+
+      {cropAvatarFile && createPortal(
+        <ImageCropTool
+          file={cropAvatarFile}
+          onSave={handleAvatarCropSave}
+          onCancel={() => setCropAvatarFile(null)}
+        />,
+        document.body
+      )}
     </div>
   );
 }

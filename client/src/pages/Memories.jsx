@@ -69,6 +69,7 @@ function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
   const [editDate, setEditDate] = useState((memory.date || memory.created_at || '').split('T')[0]);
   const [saving, setSaving] = useState(false);
   const [addingFiles, setAddingFiles] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [localFiles, setLocalFiles] = useState(memory.files || []);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -94,14 +95,21 @@ function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
     const picked = Array.from(e.target.files);
     if (!picked.length) return;
     setAddingFiles(true);
+    setUploadProgress(0);
     try {
       const fd = new FormData();
       picked.forEach(f => fd.append('files', f));
-      const res = await api.post(`/memories/${memory.id}/files`, fd);
+      const res = await api.post(`/memories/${memory.id}/files`, fd, {
+        timeout: 300000,
+        onUploadProgress: (ev) => {
+          if (ev.total) setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
+        },
+      });
       setLocalFiles(res.data.files);
       onUpdate({ ...memory, content: editContent, date: editDate, files: res.data.files });
     } catch {}
     setAddingFiles(false);
+    setUploadProgress(null);
     e.target.value = '';
   };
 
@@ -170,9 +178,15 @@ function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
             <>
               <button onClick={() => addFileRef.current.click()} disabled={addingFiles}
                 className="w-full border-2 border-dashed border-white/20 rounded-xl py-3 text-white/60 text-sm hover:border-rose-400 hover:text-rose-400 transition-colors disabled:opacity-50">
-                {addingFiles ? '上傳中...' : '＋ 追加照片'}
+                {addingFiles ? `上傳中... ${uploadProgress ?? 0}%` : '＋ 追加照片'}
               </button>
               <input ref={addFileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleAddFiles} />
+              {addingFiles && uploadProgress !== null && (
+                <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                  <div className="bg-rose-400 h-1.5 rounded-full transition-all duration-200"
+                    style={{ width: `${uploadProgress}%` }} />
+                </div>
+              )}
             </>
           )}
           <button onClick={handleSave} disabled={saving}
@@ -317,6 +331,7 @@ function AlbumDetail({ album, onClose, onAlbumUpdate, onAlbumDelete }) {
   const [newName, setNewName] = useState(album.name);
   const [renaming, setRenaming] = useState(false);
   const [addingFiles, setAddingFiles] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -338,14 +353,21 @@ function AlbumDetail({ album, onClose, onAlbumUpdate, onAlbumDelete }) {
     const picked = Array.from(e.target.files);
     if (!picked.length) return;
     setAddingFiles(true);
+    setUploadProgress(0);
     try {
       const fd = new FormData();
       picked.forEach(f => fd.append('files', f));
-      const res = await api.post(`/albums/${album.id}/files`, fd);
+      const res = await api.post(`/albums/${album.id}/files`, fd, {
+        timeout: 300000,
+        onUploadProgress: (ev) => {
+          if (ev.total) setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
+        },
+      });
       setFiles(res.data.files);
       onAlbumUpdate({ ...album, files: res.data.files, count: res.data.files.length, cover: res.data.files[0] || null });
     } catch {}
     setAddingFiles(false);
+    setUploadProgress(null);
     e.target.value = '';
   };
 
@@ -389,26 +411,33 @@ function AlbumDetail({ album, onClose, onAlbumUpdate, onAlbumDelete }) {
       </div>
 
       {/* Sub-header: count + actions */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 bg-white border-b border-rose-50">
-        <span className="text-xs text-gray-400">{files.length} 張照片</span>
-        <div className="flex items-center gap-4">
-          <button onClick={() => addFileRef.current.click()} disabled={addingFiles}
-            className="text-sm text-rose-500 font-medium disabled:opacity-50">
-            {addingFiles ? '上傳中...' : '＋ 新增'}
-          </button>
-          <input ref={addFileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleAddFiles} />
-          {!confirmDelete ? (
-            <button onClick={() => setConfirmDelete(true)} className="text-sm text-red-400">刪除相簿</button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <button onClick={() => setConfirmDelete(false)} className="text-sm text-gray-400">取消</button>
-              <button onClick={handleDelete} disabled={deleting}
-                className="text-sm text-white bg-red-500 px-3 py-1 rounded-lg disabled:opacity-60">
-                {deleting ? '刪除中...' : '確定'}
-              </button>
-            </div>
-          )}
+      <div className="flex-shrink-0 bg-white border-b border-rose-50">
+        <div className="flex items-center justify-between px-4 py-2">
+          <span className="text-xs text-gray-400">{files.length} 張照片</span>
+          <div className="flex items-center gap-4">
+            <button onClick={() => addFileRef.current.click()} disabled={addingFiles}
+              className="text-sm text-rose-500 font-medium disabled:opacity-50">
+              {addingFiles ? `上傳中 ${uploadProgress ?? 0}%` : '＋ 新增'}
+            </button>
+            <input ref={addFileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleAddFiles} />
+            {!confirmDelete ? (
+              <button onClick={() => setConfirmDelete(true)} className="text-sm text-red-400">刪除相簿</button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setConfirmDelete(false)} className="text-sm text-gray-400">取消</button>
+                <button onClick={handleDelete} disabled={deleting}
+                  className="text-sm text-white bg-red-500 px-3 py-1 rounded-lg disabled:opacity-60">
+                  {deleting ? '刪除中...' : '確定'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
+        {addingFiles && uploadProgress !== null && (
+          <div className="h-1 bg-gray-100 overflow-hidden">
+            <div className="bg-rose-500 h-1 transition-all duration-200" style={{ width: `${uploadProgress}%` }} />
+          </div>
+        )}
       </div>
 
       {/* 3-col photo grid */}
@@ -469,6 +498,7 @@ function AlbumsTab({ triggerNew }) {
   const [newFiles, setNewFiles] = useState([]);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [createProgress, setCreateProgress] = useState(null);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const fileRef = useRef();
 
@@ -486,17 +516,22 @@ function AlbumsTab({ triggerNew }) {
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    setCreateError(''); setCreating(true);
+    setCreateError(''); setCreating(true); setCreateProgress(0);
     try {
       const fd = new FormData();
       fd.append('name', newName.trim());
       newFiles.forEach(f => fd.append('files', f));
-      const res = await api.post('/albums', fd);
+      const res = await api.post('/albums', fd, {
+        timeout: 300000,
+        onUploadProgress: (ev) => {
+          if (ev.total) setCreateProgress(Math.round((ev.loaded / ev.total) * 100));
+        },
+      });
       setAlbums(prev => [res.data.album, ...prev]);
       setShowForm(false); setNewName(''); setNewFiles([]);
     } catch (err) {
       setCreateError(err.response?.data?.error || '建立失敗');
-    } finally { setCreating(false); }
+    } finally { setCreating(false); setCreateProgress(null); }
   };
 
   const handleAlbumUpdate = (updated) => {
@@ -540,9 +575,15 @@ function AlbumsTab({ triggerNew }) {
                 className="flex-1 border border-gray-200 text-gray-500 py-2.5 rounded-xl text-sm">取消</button>
               <button type="submit" disabled={creating || !newName.trim()}
                 className="flex-1 bg-rose-500 text-white font-semibold py-2.5 rounded-xl text-sm disabled:opacity-60">
-                {creating ? '建立中...' : '建立相簿'}
+                {creating ? `上傳中 ${createProgress ?? 0}%` : '建立相簿'}
               </button>
             </div>
+            {creating && createProgress !== null && (
+              <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                <div className="bg-rose-500 h-1.5 rounded-full transition-all duration-200"
+                  style={{ width: `${createProgress}%` }} />
+              </div>
+            )}
           </form>
         </div>
       )}
@@ -589,6 +630,7 @@ export default function Memories() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [files, setFiles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState(null);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
   const [albumNewTrigger, setAlbumNewTrigger] = useState(0);
@@ -604,19 +646,24 @@ export default function Memories() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(''); setSubmitting(true);
+    setError(''); setSubmitting(true); setSubmitProgress(0);
     try {
       const fd = new FormData();
       fd.append('type', type); fd.append('date', date);
       if (content) fd.append('content', content);
       files.forEach(f => fd.append('files', f));
-      const r = await api.post('/memories', fd);
+      const r = await api.post('/memories', fd, {
+        timeout: 300000,
+        onUploadProgress: (ev) => {
+          if (ev.total) setSubmitProgress(Math.round((ev.loaded / ev.total) * 100));
+        },
+      });
       setMemories([r.data.memory, ...memories]);
       setShowForm(false); setContent(''); setFiles([]); setType('text');
       setDate(new Date().toISOString().split('T')[0]);
     } catch (err) {
       setError(err.response?.data?.error || '上傳失敗');
-    } finally { setSubmitting(false); }
+    } finally { setSubmitting(false); setSubmitProgress(null); }
   };
 
   const handleUpdate = (updated) => {
@@ -715,8 +762,14 @@ export default function Memories() {
                 )}
                 <button type="submit" disabled={submitting}
                   className="w-full bg-rose-500 text-white font-semibold py-2.5 rounded-xl disabled:opacity-60 text-sm">
-                  {submitting ? '上傳中...' : '儲存回憶 ❤️'}
+                  {submitting ? `上傳中 ${submitProgress ?? 0}%` : '儲存回憶 ❤️'}
                 </button>
+                {submitting && submitProgress !== null && (
+                  <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                    <div className="bg-rose-500 h-1.5 rounded-full transition-all duration-200"
+                      style={{ width: `${submitProgress}%` }} />
+                  </div>
+                )}
               </form>
             </div>
           )}
