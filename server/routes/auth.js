@@ -10,13 +10,13 @@ const authMiddleware = require('../middleware/auth');
 
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
-  filename: (req, file, cb) => cb(null, 'avatar-' + uuidv4() + path.extname(file.originalname)),
+  filename: (req, file, cb) => cb(null, 'avatar-' + uuidv4() + path.extname(file.originalname || '.jpg')),
 });
 const avatarUpload = multer({
   storage: avatarStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) =>
-    /jpg|jpeg|png|gif|webp/i.test(path.extname(file.originalname).slice(1))
+    file.mimetype.startsWith('image/')
       ? cb(null, true) : cb(new Error('Image only'), false),
 });
 

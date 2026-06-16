@@ -6,6 +6,8 @@ export const THEMES = [
   { id: 'ocean',  name: '海洋',   emoji: '🌊', primary: '#0ea5e9', light: '#f0f9ff', preview: ['#0ea5e9', '#38bdf8', '#f0f9ff'] },
   { id: 'plum',   name: '紫羅蘭', emoji: '💜', primary: '#8b5cf6', light: '#f5f3ff', preview: ['#8b5cf6', '#a78bfa', '#f5f3ff'] },
   { id: 'sunset', name: '夕陽',   emoji: '🌅', primary: '#f97316', light: '#fff7ed', preview: ['#f97316', '#fb923c', '#fff7ed'] },
+  { id: 'sakura', name: '和風',   emoji: '🌸', primary: '#e879a0', light: '#fff0f6', preview: ['#e879a0', '#f9a8d4', '#fff0f6'] },
+  { id: 'china',  name: '中國風', emoji: '🏮', primary: '#c41c1c', light: '#fff5f5', preview: ['#c41c1c', '#b45309', '#fff5f5'] },
   { id: 'night',  name: '深夜',   emoji: '🌙', primary: '#f43f5e', light: '#0f172a', preview: ['#0f172a', '#1e293b', '#f43f5e'] },
 ];
 

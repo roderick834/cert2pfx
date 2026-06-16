@@ -13,6 +13,14 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   background-color: #fff1f2;
   min-height: 100vh;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Prevent iOS Safari from auto-zooming on input focus (triggered when font-size < 16px) */
+input:not([type='range']):not([type='checkbox']):not([type='radio']):not([type='color']),
+textarea,
+select {
+  font-size: 16px !important;
 }
 #root { min-height: 100vh; }
 
@@ -133,6 +141,60 @@ body {
 [data-theme="sunset"] .to-red-50      { --tw-gradient-to: #fef2f2 !important; }
 [data-theme="sunset"] ::-webkit-scrollbar-thumb { background: #fdba74; }
 [data-theme="sunset"] ::-webkit-scrollbar-track { background: #ffedd5; }
+
+/* ═══════════════════════════════════════
+   THEME: sakura / 和風 (#e879a0 pink)
+═══════════════════════════════════════ */
+[data-theme="sakura"] body { background-color: #fff0f6; }
+[data-theme="sakura"] .bg-rose-500  { background-color: #e879a0 !important; }
+[data-theme="sakura"] .hover\:bg-rose-600:hover { background-color: #db2777 !important; }
+[data-theme="sakura"] .active\:bg-rose-700:active { background-color: #be185d !important; }
+[data-theme="sakura"] .bg-rose-600  { background-color: #db2777 !important; }
+[data-theme="sakura"] .bg-rose-50   { background-color: #fff0f6 !important; }
+[data-theme="sakura"] .bg-rose-100  { background-color: #fce7f3 !important; }
+[data-theme="sakura"] .bg-rose-400  { background-color: #f472b6 !important; }
+[data-theme="sakura"] .text-rose-400 { color: #f9a8d4 !important; }
+[data-theme="sakura"] .text-rose-500 { color: #e879a0 !important; }
+[data-theme="sakura"] .text-rose-600 { color: #db2777 !important; }
+[data-theme="sakura"] .text-rose-700 { color: #be185d !important; }
+[data-theme="sakura"] .border-rose-100 { border-color: #fce7f3 !important; }
+[data-theme="sakura"] .border-rose-200 { border-color: #fbcfe8 !important; }
+[data-theme="sakura"] .border-rose-300 { border-color: #f9a8d4 !important; }
+[data-theme="sakura"] .border-rose-400 { border-color: #f472b6 !important; }
+[data-theme="sakura"] .from-rose-400  { --tw-gradient-from: #f472b6 !important; }
+[data-theme="sakura"] .from-rose-100  { --tw-gradient-from: #fce7f3 !important; }
+[data-theme="sakura"] .to-pink-500    { --tw-gradient-to: #ec4899 !important; }
+[data-theme="sakura"] .via-pink-50    { --tw-gradient-via: #fff0f6 !important; }
+[data-theme="sakura"] .to-red-50      { --tw-gradient-to: #fff0f6 !important; }
+[data-theme="sakura"] ::-webkit-scrollbar-thumb { background: #f9a8d4; }
+[data-theme="sakura"] ::-webkit-scrollbar-track { background: #fce7f3; }
+
+/* ═══════════════════════════════════════
+   THEME: china / 中國風 (#c41c1c red-gold)
+═══════════════════════════════════════ */
+[data-theme="china"] body { background-color: #fff5f5; }
+[data-theme="china"] .bg-rose-500  { background-color: #c41c1c !important; }
+[data-theme="china"] .hover\:bg-rose-600:hover { background-color: #991b1b !important; }
+[data-theme="china"] .active\:bg-rose-700:active { background-color: #7f1d1d !important; }
+[data-theme="china"] .bg-rose-600  { background-color: #991b1b !important; }
+[data-theme="china"] .bg-rose-50   { background-color: #fff5f5 !important; }
+[data-theme="china"] .bg-rose-100  { background-color: #fee2e2 !important; }
+[data-theme="china"] .bg-rose-400  { background-color: #f87171 !important; }
+[data-theme="china"] .text-rose-400 { color: #b45309 !important; }
+[data-theme="china"] .text-rose-500 { color: #c41c1c !important; }
+[data-theme="china"] .text-rose-600 { color: #991b1b !important; }
+[data-theme="china"] .text-rose-700 { color: #7f1d1d !important; }
+[data-theme="china"] .border-rose-100 { border-color: #fee2e2 !important; }
+[data-theme="china"] .border-rose-200 { border-color: #fecaca !important; }
+[data-theme="china"] .border-rose-300 { border-color: #fca5a5 !important; }
+[data-theme="china"] .border-rose-400 { border-color: #f87171 !important; }
+[data-theme="china"] .from-rose-400  { --tw-gradient-from: #dc2626 !important; }
+[data-theme="china"] .from-rose-100  { --tw-gradient-from: #fee2e2 !important; }
+[data-theme="china"] .to-pink-500    { --tw-gradient-to: #b45309 !important; }
+[data-theme="china"] .via-pink-50    { --tw-gradient-via: #fff5f5 !important; }
+[data-theme="china"] .to-red-50      { --tw-gradient-to: #fff5f5 !important; }
+[data-theme="china"] ::-webkit-scrollbar-thumb { background: #fca5a5; }
+[data-theme="china"] ::-webkit-scrollbar-track { background: #fee2e2; }
 
 /* ═══════════════════════════════════════
    THEME: night (dark + rose accent)

@@ -47,17 +47,26 @@ export default function Profile() {
   // Avatar — always derive from user in context so it stays in sync
   const avatarUrl = user?.avatar || null;
   const [avatarLoading, setAvatarLoading] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
 
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setAvatarLoading(true);
+    setAvatarError('');
     try {
       const fd = new FormData();
       fd.append('avatar', file);
-      const res = await api.post('/auth/avatar', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      updateUser({ avatar: res.data.user.avatar });
-    } catch {}
+      // Do NOT manually set Content-Type — axios sets it with boundary automatically for FormData
+      const res = await api.post('/auth/avatar', fd);
+      if (res.data?.user?.avatar) {
+        updateUser({ avatar: res.data.user.avatar });
+      } else {
+        setAvatarError('上傳成功但路徑錯誤');
+      }
+    } catch (err) {
+      setAvatarError(err.response?.data?.error || '上傳失敗，請重試');
+    }
     setAvatarLoading(false);
     e.target.value = '';
   };
@@ -162,9 +171,14 @@ export default function Profile() {
           </button>
           <input ref={avatarRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-lg font-bold text-gray-800">{user?.username}</p>
           <p className="text-sm text-gray-400">{user?.email}</p>
+          {avatarLoading && <p className="text-xs text-rose-400 mt-1">上傳中...</p>}
+          {avatarError && <p className="text-xs text-red-500 mt-1">{avatarError}</p>}
+          {!avatarLoading && !avatarError && !avatarUrl && (
+            <p className="text-xs text-gray-400 mt-1">點頭像可更換照片</p>
+          )}
         </div>
       </div>
 
@@ -308,16 +322,16 @@ export default function Profile() {
       {/* Theme picker */}
       <div className="bg-white rounded-2xl shadow-sm p-5">
         <p className="font-semibold text-gray-700 text-sm mb-3">🎨 佈景主題</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-2">
           {THEMES.map(t => (
             <button key={t.id} onClick={() => setTheme(t.id)}
-              className={`relative rounded-2xl overflow-hidden h-20 flex flex-col items-center justify-center gap-1 border-2 transition-all ${
+              className={`relative rounded-2xl overflow-hidden h-16 flex flex-col items-center justify-center gap-1 border-2 transition-all ${
                 theme === t.id ? 'border-gray-700 scale-105 shadow-md' : 'border-transparent'
               }`}
               style={{ backgroundColor: t.light }}
             >
-              <div className="w-8 h-8 rounded-full shadow-sm" style={{ backgroundColor: t.primary }} />
-              <span className="text-xs font-medium text-gray-600">{t.name}</span>
+              <span className="text-lg">{t.emoji}</span>
+              <span className="text-[10px] font-medium text-gray-600 leading-tight">{t.name}</span>
               {theme === t.id && (
                 <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-gray-800 flex items-center justify-center">
                   <span className="text-white text-[8px]">✓</span>
