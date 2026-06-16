@@ -279,6 +279,71 @@ io.on('connection', (socket) => {
   });
 });
 
+// ── Daily date reminder scheduler ──────────────────────────────
+// Fires every day at 08:00 server time; notifies both couple members
+// when a special date is TODAY or exactly 2 days away.
+
+function checkUpcomingDates() {
+  try {
+    const now = new Date();
+    const todayStr  = toLocalDateStr(now);
+    const in2Days   = new Date(now); in2Days.setDate(in2Days.getDate() + 2);
+    const in2Str    = toLocalDateStr(in2Days);
+
+    const allDates = db.prepare('SELECT sd.*, c.user1_id, c.user2_id FROM special_dates sd JOIN couples c ON sd.couple_id = c.id').all();
+
+    for (const d of allDates) {
+      const dateParts = d.date.split('-'); // YYYY-MM-DD
+      const month = dateParts[1]; const day = dateParts[2];
+
+      for (const target of [todayStr, in2Str]) {
+        const tParts = target.split('-');
+        const matches = d.repeat_yearly
+          ? (tParts[1] === month && tParts[2] === day)
+          : (d.date === target);
+
+        if (!matches) continue;
+
+        const isToday = target === todayStr;
+        const daysAway = isToday ? 0 : 2;
+        const titleLine = isToday
+          ? `${d.emoji} 今天是「${d.title}」！`
+          : `${d.emoji} 再 2 天就是「${d.title}」！`;
+        const bodyLine = isToday ? '一起慶祝吧 💕' : '別忘了提前準備喔 💕';
+
+        const payload = { title: titleLine, body: bodyLine, tag: `date-${d.id}-${target}`, url: '/dates' };
+
+        for (const uid of [d.user1_id, d.user2_id].filter(Boolean)) {
+          sendPush(uid, payload);
+          sendNtfy(uid, titleLine, bodyLine, 'calendar');
+        }
+
+        console.log(`[DateReminder] Notified for "${d.title}" (${daysAway} days away)`);
+      }
+    }
+  } catch (err) {
+    console.error('[DateReminder] Error:', err.message);
+  }
+}
+
+function toLocalDateStr(d) {
+  return d.getFullYear() + '-'
+    + String(d.getMonth() + 1).padStart(2, '0') + '-'
+    + String(d.getDate()).padStart(2, '0');
+}
+
+function scheduleNextDailyRun(fn) {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(8, 0, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  const ms = next - now;
+  console.log(`[DateReminder] Next check at ${next.toLocaleString()} (in ${Math.round(ms / 60000)} min)`);
+  setTimeout(() => { fn(); scheduleNextDailyRun(fn); }, ms);
+}
+
+scheduleNextDailyRun(checkUpcomingDates);
+
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

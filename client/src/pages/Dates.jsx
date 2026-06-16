@@ -4,6 +4,13 @@ import api from '../api';
 
 const EMOJIS = ['❤️', '💍', '🎂', '🌸', '✈️', '🎉', '💑', '🏠', '🐾', '🎁', '🌙', '⭐', '🎊', '💐', '🥂', '🌅'];
 
+const QUICK_PRESETS = [
+  { label: '🎂 生日',   emoji: '🎂', titleTemplate: '的生日',   repeatYearly: true  },
+  { label: '💍 紀念日', emoji: '💍', titleTemplate: '紀念日',   repeatYearly: true  },
+  { label: '✈️ 旅行',  emoji: '✈️', titleTemplate: '旅行',     repeatYearly: false },
+  { label: '🎉 活動',  emoji: '🎉', titleTemplate: '活動',     repeatYearly: false },
+];
+
 function daysUntil(dateStr, repeatYearly) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -19,17 +26,30 @@ function daysUntil(dateStr, repeatYearly) {
 function DateCard({ d, onDelete }) {
   const days = daysUntil(d.date, d.repeat_yearly);
   const isToday = days === 0;
+  const isTomorrow = days === 1;
+  const isIn2Days = days === 2;
   const isPast = days < 0 && !d.repeat_yearly;
+  const isSoon = days > 0 && days <= 2;
 
   return (
-    <div className={`relative bg-white rounded-2xl shadow-sm overflow-hidden transition-all active:scale-[0.98] ${isToday ? 'ring-2 ring-rose-400' : ''}`}>
-      <div className={`absolute left-0 top-0 bottom-0 w-1 ${isToday ? 'bg-rose-400' : isPast ? 'bg-gray-200' : 'bg-rose-200'}`} />
+    <div className={`relative bg-white rounded-2xl shadow-sm overflow-hidden transition-all active:scale-[0.98]
+      ${isToday ? 'ring-2 ring-rose-400' : isSoon ? 'ring-1 ring-rose-200' : ''}`}>
+      <div className={`absolute left-0 top-0 bottom-0 w-1
+        ${isToday ? 'bg-rose-400' : isSoon ? 'bg-rose-300' : isPast ? 'bg-gray-200' : 'bg-rose-200'}`} />
       <div className="pl-4 pr-3 py-3.5 flex items-center gap-3">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 ${isToday ? 'bg-rose-50' : 'bg-gray-50'}`}>
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0
+          ${isToday ? 'bg-rose-50' : isSoon ? 'bg-rose-50/60' : 'bg-gray-50'}`}>
           {d.emoji}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-800 text-sm truncate">{d.title}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="font-semibold text-gray-800 text-sm truncate">{d.title}</p>
+            {isSoon && !isToday && (
+              <span className="flex-shrink-0 text-xs bg-rose-500 text-white px-1.5 py-0.5 rounded-full font-medium">
+                {isTomorrow ? '明天' : '2天後'}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-gray-400 mt-0.5">
             {new Date(d.date + 'T00:00:00').toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' })}
             {d.repeat_yearly ? ' · 每年' : ''}
@@ -42,7 +62,7 @@ function DateCard({ d, onDelete }) {
             <span className="text-gray-400 text-sm">已過 {Math.abs(days)} 天</span>
           ) : (
             <>
-              <span className="text-rose-500 font-bold text-lg leading-none">{days}</span>
+              <span className={`font-bold text-lg leading-none ${isSoon ? 'text-rose-500' : 'text-rose-400'}`}>{days}</span>
               <span className="text-gray-400 text-xs">天後</span>
             </>
           )}
@@ -137,6 +157,20 @@ export default function Dates() {
 
       {showForm && (
         <form onSubmit={handleAdd} className="bg-white rounded-2xl shadow-sm p-4 mb-4 space-y-3 animate-fade-in">
+          {/* Quick presets */}
+          <div>
+            <p className="text-xs text-gray-500 mb-2">快速選擇類型</p>
+            <div className="flex gap-2 flex-wrap">
+              {QUICK_PRESETS.map(p => (
+                <button key={p.label} type="button"
+                  onClick={() => { setEmoji(p.emoji); setTitle(p.titleTemplate); setRepeatYearly(p.repeatYearly); }}
+                  className="px-3 py-1.5 rounded-full text-sm bg-rose-50 text-rose-500 font-medium hover:bg-rose-100 transition-colors">
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Emoji picker */}
           <div>
             <p className="text-xs text-gray-500 mb-2">選擇圖示</p>
@@ -152,7 +186,7 @@ export default function Dates() {
 
           <input
             type="text" value={title} onChange={e => setTitle(e.target.value)}
-            placeholder="日子名稱（例：第一次約會）" required
+            placeholder="日子名稱（例：媽媽的生日）" required
             className="w-full border border-rose-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
           />
 
