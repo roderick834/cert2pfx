@@ -70,6 +70,7 @@ db.exec(`
 // Idempotent migrations
 try { db.exec('ALTER TABLE messages ADD COLUMN read_at TEXT'); } catch {}
 try { db.exec('ALTER TABLE users ADD COLUMN ntfy_topic TEXT'); } catch {}
+try { db.exec('ALTER TABLE users ADD COLUMN birthday TEXT'); } catch {}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS special_dates (

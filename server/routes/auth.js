@@ -119,6 +119,19 @@ router.post('/avatar', authMiddleware, avatarUpload.single('avatar'), (req, res)
   }
 });
 
+// PATCH /api/auth/birthday — save user's birthday
+router.patch('/birthday', authMiddleware, (req, res) => {
+  try {
+    const { birthday } = req.body;
+    // Allow clearing (null/empty) or a valid YYYY-MM-DD
+    const value = birthday && /^\d{4}-\d{2}-\d{2}$/.test(birthday) ? birthday : null;
+    db.prepare('UPDATE users SET birthday = ? WHERE id = ?').run(value, req.user.id);
+    return res.json({ ok: true, birthday: value });
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // DELETE /api/auth/avatar — remove profile photo
 router.delete('/avatar', authMiddleware, (req, res) => {
   try {

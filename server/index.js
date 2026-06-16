@@ -286,39 +286,50 @@ io.on('connection', (socket) => {
 function checkUpcomingDates() {
   try {
     const now = new Date();
-    const todayStr  = toLocalDateStr(now);
-    const in2Days   = new Date(now); in2Days.setDate(in2Days.getDate() + 2);
-    const in2Str    = toLocalDateStr(in2Days);
+    const todayStr = toLocalDateStr(now);
+    const in2Days  = new Date(now); in2Days.setDate(in2Days.getDate() + 2);
+    const in2Str   = toLocalDateStr(in2Days);
 
+    // ── 1. Check special_dates (notify both couple members) ──
     const allDates = db.prepare('SELECT sd.*, c.user1_id, c.user2_id FROM special_dates sd JOIN couples c ON sd.couple_id = c.id').all();
-
     for (const d of allDates) {
-      const dateParts = d.date.split('-'); // YYYY-MM-DD
-      const month = dateParts[1]; const day = dateParts[2];
-
+      const [, month, day] = d.date.split('-');
       for (const target of [todayStr, in2Str]) {
-        const tParts = target.split('-');
-        const matches = d.repeat_yearly
-          ? (tParts[1] === month && tParts[2] === day)
-          : (d.date === target);
-
+        const [, tm, td] = target.split('-');
+        const matches = d.repeat_yearly ? (tm === month && td === day) : (d.date === target);
         if (!matches) continue;
-
         const isToday = target === todayStr;
-        const daysAway = isToday ? 0 : 2;
-        const titleLine = isToday
-          ? `${d.emoji} 今天是「${d.title}」！`
-          : `${d.emoji} 再 2 天就是「${d.title}」！`;
-        const bodyLine = isToday ? '一起慶祝吧 💕' : '別忘了提前準備喔 💕';
-
-        const payload = { title: titleLine, body: bodyLine, tag: `date-${d.id}-${target}`, url: '/dates' };
-
+        const titleLine = isToday ? `${d.emoji} 今天是「${d.title}」！` : `${d.emoji} 再 2 天就是「${d.title}」！`;
+        const bodyLine  = isToday ? '一起慶祝吧 💕' : '別忘了提前準備喔 💕';
+        const payload   = { title: titleLine, body: bodyLine, tag: `date-${d.id}-${target}`, url: '/dates' };
         for (const uid of [d.user1_id, d.user2_id].filter(Boolean)) {
           sendPush(uid, payload);
           sendNtfy(uid, titleLine, bodyLine, 'calendar');
         }
+        console.log(`[DateReminder] "${d.title}" (${isToday ? '今天' : '2天後'})`);
+      }
+    }
 
-        console.log(`[DateReminder] Notified for "${d.title}" (${daysAway} days away)`);
+    // ── 2. Check users' birthdays (notify only the partner) ──
+    const couples = db.prepare('SELECT * FROM couples WHERE user2_id IS NOT NULL').all();
+    for (const c of couples) {
+      for (const [selfId, partnerId] of [[c.user1_id, c.user2_id], [c.user2_id, c.user1_id]]) {
+        const u = db.prepare('SELECT username, birthday FROM users WHERE id = ?').get(selfId);
+        if (!u?.birthday) continue;
+        const [, bMonth, bDay] = u.birthday.split('-');
+        for (const target of [todayStr, in2Str]) {
+          const [, tm, td] = target.split('-');
+          if (tm !== bMonth || td !== bDay) continue;
+          const isToday = target === todayStr;
+          const titleLine = isToday
+            ? `🎂 今天是 ${u.username} 的生日！`
+            : `🎂 再 2 天就是 ${u.username} 的生日！`;
+          const bodyLine = isToday ? '記得說生日快樂 🎉' : '提前準備個驚喜吧 💕';
+          const payload  = { title: titleLine, body: bodyLine, tag: `bday-${selfId}-${target}`, url: '/dates' };
+          sendPush(partnerId, payload);
+          sendNtfy(partnerId, titleLine, bodyLine, 'birthday');
+          console.log(`[DateReminder] ${u.username} 的生日 → 通知 ${partnerId}`);
+        }
       }
     }
   } catch (err) {

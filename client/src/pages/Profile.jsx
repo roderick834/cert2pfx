@@ -44,6 +44,22 @@ export default function Profile() {
     } catch {}
   };
 
+  // Birthday
+  const [birthday, setBirthday] = useState(user?.birthday || '');
+  const [birthdaySaving, setBirthdaySaving] = useState(false);
+  const [birthdayMsg, setBirthdayMsg] = useState('');
+
+  const saveBirthday = async () => {
+    setBirthdaySaving(true);
+    try {
+      await api.patch('/auth/birthday', { birthday: birthday || null });
+      updateUser({ birthday: birthday || null });
+      setBirthdayMsg('✅ 已儲存');
+      setTimeout(() => setBirthdayMsg(''), 3000);
+    } catch { setBirthdayMsg('儲存失敗'); }
+    finally { setBirthdaySaving(false); }
+  };
+
   // Avatar — always derive from user in context so it stays in sync
   const avatarUrl = user?.avatar || null;
   const [avatarLoading, setAvatarLoading] = useState(false);
@@ -152,34 +168,61 @@ export default function Profile() {
   return (
     <div className="px-4 py-6 space-y-4">
       {/* User info card */}
-      <div className="bg-white rounded-2xl shadow-sm p-5 flex items-center gap-4">
-        <div className="relative">
-          <button
-            onClick={() => avatarRef.current.click()}
-            disabled={avatarLoading}
-            className="w-16 h-16 rounded-full overflow-hidden shadow-md ring-2 ring-rose-200 flex-shrink-0 relative"
-          >
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center text-white text-2xl font-bold">
-                {user?.username?.[0]?.toUpperCase() || '?'}
+      <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <button
+              onClick={() => avatarRef.current.click()}
+              disabled={avatarLoading}
+              className="w-16 h-16 rounded-full overflow-hidden shadow-md ring-2 ring-rose-200 flex-shrink-0 relative"
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center text-white text-2xl font-bold">
+                  {user?.username?.[0]?.toUpperCase() || '?'}
+                </div>
+              )}
+              <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 active:opacity-100 transition-opacity">
+                <span className="text-white text-lg">{avatarLoading ? '⏳' : '📷'}</span>
               </div>
+            </button>
+            <input ref={avatarRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-lg font-bold text-gray-800">{user?.username}</p>
+            <p className="text-sm text-gray-400">{user?.email}</p>
+            {avatarLoading && <p className="text-xs text-rose-400 mt-1">上傳中...</p>}
+            {avatarError && <p className="text-xs text-red-500 mt-1">{avatarError}</p>}
+            {!avatarLoading && !avatarError && !avatarUrl && (
+              <p className="text-xs text-gray-400 mt-1">點頭像可更換照片</p>
             )}
-            <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 active:opacity-100 transition-opacity">
-              <span className="text-white text-lg">{avatarLoading ? '⏳' : '📷'}</span>
-            </div>
-          </button>
-          <input ref={avatarRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-lg font-bold text-gray-800">{user?.username}</p>
-          <p className="text-sm text-gray-400">{user?.email}</p>
-          {avatarLoading && <p className="text-xs text-rose-400 mt-1">上傳中...</p>}
-          {avatarError && <p className="text-xs text-red-500 mt-1">{avatarError}</p>}
-          {!avatarLoading && !avatarError && !avatarUrl && (
-            <p className="text-xs text-gray-400 mt-1">點頭像可更換照片</p>
+
+        {/* Birthday */}
+        <div className="border-t border-gray-50 pt-4">
+          <p className="text-xs text-gray-500 mb-2">🎂 我的生日</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={birthday}
+              onChange={e => setBirthday(e.target.value)}
+              className="flex-1 border border-rose-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+            />
+            <button onClick={saveBirthday} disabled={birthdaySaving}
+              className="bg-rose-500 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-60 flex-shrink-0">
+              {birthdaySaving ? '儲存...' : '儲存'}
+            </button>
+          </div>
+          {birthdayMsg && <p className="text-xs text-gray-500 mt-1.5">{birthdayMsg}</p>}
+          {couple?.partner?.birthday && (
+            <p className="text-xs text-rose-400 mt-2">
+              🎂 {couple.partner.username} 的生日：
+              {new Date(couple.partner.birthday + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'long', day: 'numeric' })}
+            </p>
           )}
+          <p className="text-xs text-gray-400 mt-1.5">儲存後，App 會在生日前 2 天提醒另一半 💕</p>
         </div>
       </div>
 

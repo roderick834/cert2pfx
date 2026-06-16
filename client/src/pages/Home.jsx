@@ -298,6 +298,26 @@ export default function Home() {
             <p className="text-white/75 text-xs drop-shadow">相愛的第一天 · {formattedStart}</p>
           )}
 
+          {/* Anniversary countdown */}
+          {couple?.couple?.couple_date && (() => {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const [y, m, d] = couple.couple.couple_date.split('T')[0].split('-').map(Number);
+            let ann = new Date(today.getFullYear(), m - 1, d);
+            if (ann < today) ann = new Date(today.getFullYear() + 1, m - 1, d);
+            const days = Math.round((ann - today) / 86400000);
+            const years = ann.getFullYear() - y;
+            return days === 0 ? (
+              <div className="bg-white/25 backdrop-blur-sm rounded-2xl px-4 py-2 text-center">
+                <p className="text-white font-bold text-sm">🎊 今天是 {years} 週年紀念日！</p>
+              </div>
+            ) : (
+              <div className="bg-white/20 backdrop-blur-sm rounded-2xl px-4 py-2 flex items-center gap-2">
+                <span className="text-white/80 text-xs">💑 {years} 週年紀念日</span>
+                <span className="text-white font-bold text-sm ml-auto">還有 {days} 天</span>
+              </div>
+            );
+          })()}
+
           {/* Big days counter */}
           <div className="text-center leading-none">
             <p className="text-white/75 text-sm font-medium drop-shadow">過了</p>

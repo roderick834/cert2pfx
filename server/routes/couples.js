@@ -95,12 +95,12 @@ router.get('/info', (req, res) => {
     let partner = null;
     if (partnerId) {
       partner = db.prepare(
-        'SELECT id, username, avatar FROM users WHERE id = ?'
+        'SELECT id, username, avatar, birthday FROM users WHERE id = ?'
       ).get(partnerId);
     }
 
     const me = db.prepare(
-      'SELECT id, username, avatar FROM users WHERE id = ?'
+      'SELECT id, username, avatar, birthday FROM users WHERE id = ?'
     ).get(userId);
 
     // Calculate days together
