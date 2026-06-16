@@ -107,8 +107,10 @@ export default function Chat() {
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Chat header */}
       <div className="px-4 py-3 bg-white border-b border-rose-100 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-rose-200 flex items-center justify-center text-rose-600 font-bold text-sm">
-          {couple.partner?.username?.[0]?.toUpperCase() || '?'}
+        <div className="w-9 h-9 rounded-full bg-rose-200 flex items-center justify-center text-rose-600 font-bold text-sm overflow-hidden flex-shrink-0">
+          {couple.partner?.avatar
+            ? <img src={couple.partner.avatar} alt="" className="w-full h-full object-cover" />
+            : couple.partner?.username?.[0]?.toUpperCase() || '?'}
         </div>
         <div>
           <p className="text-sm font-semibold text-gray-700">{couple.partner?.username || '等待另一半加入...'}</p>
@@ -134,7 +136,15 @@ export default function Chat() {
             const sticker = msg.sticker_id ? stickers.find((s) => s.id === msg.sticker_id) : null;
             const showRead = isMe && msg.id === lastReadMsgId;
             return (
-              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+              <div key={msg.id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                {/* Partner avatar on left */}
+                {!isMe && (
+                  <div className="w-7 h-7 rounded-full bg-rose-200 flex items-center justify-center text-rose-600 font-bold text-xs flex-shrink-0 overflow-hidden mb-4">
+                    {couple.partner?.avatar
+                      ? <img src={couple.partner.avatar} alt="" className="w-full h-full object-cover" />
+                      : couple.partner?.username?.[0]?.toUpperCase() || '?'}
+                  </div>
+                )}
                 <div className={`max-w-[72%] ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
                   {sticker ? (
                     <img src={sticker.image_data} alt={sticker.name}

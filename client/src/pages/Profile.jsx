@@ -61,6 +61,7 @@ export default function Profile() {
       const res = await api.post('/auth/avatar', fd);
       if (res.data?.user?.avatar) {
         updateUser({ avatar: res.data.user.avatar });
+        refreshCouple(); // refresh couple.me.avatar so Home page shows the new photo
       } else {
         setAvatarError('上傳成功但路徑錯誤');
       }
