@@ -68,8 +68,9 @@ export function CallProvider({ children }) {
   const pendingCandidates = useRef([]);
   const audioCtxRef = useRef(null);
 
-  // On iOS, <video> element routes to earpiece (playAndRecord AVAudioSession),
-  // while <audio> routes to speaker. We use a tiny hidden video for call audio.
+  // Persistent <audio> element for remote call audio.
+  // Lives in document.body so it survives page navigation.
+  // On iOS with getUserMedia active, <audio> routes to earpiece (playAndRecord session).
   const remoteAudioRef = useRef(null);
   // Separate looping <audio> element for ringtone (can play in background unlike AudioContext)
   const ringtoneAudioRef = useRef(null);
@@ -77,12 +78,10 @@ export function CallProvider({ children }) {
   const localVideoEl = useRef(null);
   const remoteVideoEl = useRef(null);
 
-  // Hidden <video> element for remote call audio — earpiece routing on iOS
   useEffect(() => {
-    const el = document.createElement('video');
+    const el = document.createElement('audio');
     el.autoplay = true;
-    el.playsInline = true;
-    el.style.cssText = 'position:fixed;width:1px;height:1px;top:-2px;left:-2px;opacity:0;pointer-events:none;';
+    el.style.display = 'none';
     document.body.appendChild(el);
     remoteAudioRef.current = el;
     return () => { el.remove(); remoteAudioRef.current = null; };
@@ -142,7 +141,7 @@ export function CallProvider({ children }) {
   const remoteVideoRef = useCallback((el) => {
     remoteVideoEl.current = el;
     if (el && remoteStreamRef.current) {
-      el.muted = true; // audio handled by remoteAudioRef video element
+      el.muted = true; // audio handled by remoteAudioRef audio element
       el.srcObject = remoteStreamRef.current;
       el.play().catch(() => {});
     }
@@ -226,7 +225,7 @@ export function CallProvider({ children }) {
     pc.ontrack = (e) => {
       const remote = e.streams[0] || new MediaStream([e.track]);
       remoteStreamRef.current = remote;
-      // Audio → hidden video element (earpiece on iOS via playAndRecord session)
+      // Audio → persistent <audio> element (earpiece on iOS via playAndRecord session)
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = remote;
         remoteAudioRef.current.play().catch(() => {});

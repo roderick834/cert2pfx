@@ -24,6 +24,11 @@ export default function Profile() {
   const [ntfySaving, setNtfySaving] = useState(false);
   const [ntfyMsg, setNtfyMsg] = useState('');
 
+  // Call permissions state
+  const [permState, setPermState] = useState({ mic: 'unknown', camera: 'unknown' });
+  const [permLoading, setPermLoading] = useState(false);
+  const [permMsg, setPermMsg] = useState('');
+
   // Device tokens state
   const [devices, setDevices] = useState([]);
   const [devicesLoading, setDevicesLoading] = useState(false);
@@ -104,6 +109,37 @@ export default function Profile() {
       setNtfyInput(r.data.topic || '');
     }).catch(() => {});
   }, [user]);
+
+  useEffect(() => {
+    if (!navigator.permissions) return;
+    Promise.all([
+      navigator.permissions.query({ name: 'microphone' }).catch(() => ({ state: 'unknown' })),
+      navigator.permissions.query({ name: 'camera' }).catch(() => ({ state: 'unknown' })),
+    ]).then(([mic, cam]) => setPermState({ mic: mic.state, camera: cam.state }));
+  }, []);
+
+  const requestCallPermissions = async () => {
+    setPermLoading(true); setPermMsg('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      stream.getTracks().forEach(t => t.stop());
+      setPermState({ mic: 'granted', camera: 'granted' });
+      setPermMsg('✅ 已授權麥克風 & 鏡頭');
+    } catch {
+      // Fallback: try audio only
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+        s.getTracks().forEach(t => t.stop());
+        setPermState({ mic: 'granted', camera: 'denied' });
+        setPermMsg('✅ 麥克風已授權，鏡頭被拒絕');
+      } catch {
+        setPermState({ mic: 'denied', camera: 'denied' });
+        setPermMsg('❌ 已拒絕，請到系統設定手動開啟');
+      }
+    }
+    setPermLoading(false);
+    setTimeout(() => setPermMsg(''), 6000);
+  };
 
   const handleEnablePush = async () => {
     setPushLoading(true);
@@ -471,6 +507,37 @@ export default function Profile() {
             </div>
           )}
           {ntfyMsg && <p className="text-xs mt-2 text-gray-500">{ntfyMsg}</p>}
+        </div>
+      </div>
+
+      {/* Call Permissions */}
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-700">📞 通話權限</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {permState.mic === 'granted' && permState.camera === 'granted'
+                  ? '✅ 麥克風 & 鏡頭已授權'
+                  : permState.mic === 'granted'
+                  ? '✅ 麥克風已授權，鏡頭未授權'
+                  : permState.mic === 'denied' || permState.camera === 'denied'
+                  ? '❌ 已拒絕，請到設定 → Safari → 麥克風/鏡頭 開啟'
+                  : '語音通話需要麥克風，視訊通話需要鏡頭'}
+              </p>
+            </div>
+            {!(permState.mic === 'denied' || permState.camera === 'denied') &&
+             !(permState.mic === 'granted' && permState.camera === 'granted') && (
+              <button
+                onClick={requestCallPermissions}
+                disabled={permLoading}
+                className="bg-rose-500 text-white text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-60"
+              >
+                {permLoading ? '請求中...' : '授權'}
+              </button>
+            )}
+          </div>
+          {permMsg && <p className="text-xs mt-2 text-gray-500">{permMsg}</p>}
         </div>
       </div>
 
