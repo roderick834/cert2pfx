@@ -136,8 +136,8 @@ export default function Layout() {
         </div>
       )}
 
-      {/* Page content */}
-      <main className="flex-1 max-w-lg mx-auto w-full pb-28">
+      {/* Page content — key triggers page-enter animation on every route change */}
+      <main key={location.pathname} className="flex-1 max-w-lg mx-auto w-full pb-28 page-enter">
         <Outlet />
       </main>
 
