@@ -6,6 +6,7 @@ const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
@@ -50,28 +51,27 @@ export function CallProvider({ children }) {
     let nextTime = ctx.currentTime + 0.05;
     let stopped = false;
     let timerId;
-    function drop(t, freq, amp) {
+    // 啵啵啵 — three quick bubble pops: freq slides 1400→200 Hz in 100ms
+    function pop(t) {
       const osc = ctx.createOscillator();
       const env = ctx.createGain();
       osc.connect(env); env.connect(ctx.destination);
       osc.type = 'sine';
-      osc.frequency.value = freq;
-      osc.frequency.exponentialRampToValueAtTime(freq * 0.65, t + 0.4);
+      osc.frequency.setValueAtTime(1400, t);
+      osc.frequency.exponentialRampToValueAtTime(200, t + 0.1);
       env.gain.setValueAtTime(0.001, t);
-      env.gain.linearRampToValueAtTime(amp, t + 0.025);
-      env.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-      osc.start(t); osc.stop(t + 0.45);
+      env.gain.linearRampToValueAtTime(0.5, t + 0.006);
+      env.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+      osc.start(t); osc.stop(t + 0.12);
     }
     function burst(t) {
-      drop(t + 0.00, 880, 0.22);
-      drop(t + 0.12, 1100, 0.28);
-      drop(t + 0.25, 1320, 0.32);
-      drop(t + 0.40, 1100, 0.24);
-      drop(t + 0.55, 880, 0.18);
+      pop(t + 0.00);
+      pop(t + 0.22);
+      pop(t + 0.44);
     }
     function tick() {
       if (stopped) return;
-      while (nextTime < ctx.currentTime + 0.5) { burst(nextTime); nextTime += 2.5; }
+      while (nextTime < ctx.currentTime + 0.5) { burst(nextTime); nextTime += 1.8; }
       timerId = setTimeout(tick, 200);
     }
     ctx.resume().then(tick).catch(() => {});
@@ -159,6 +159,7 @@ export function CallProvider({ children }) {
 
     const onAnswered = async ({ answer }) => {
       if (!pcRef.current) return;
+      stopRingtone(); // caller side: stop ringing now that partner answered
       try {
         await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer));
         await drainCandidates();
@@ -207,6 +208,10 @@ export function CallProvider({ children }) {
     };
     pc.onicecandidate = (e) => {
       if (e.candidate && socket) socket.emit('webrtc-ice-candidate', { candidate: e.candidate });
+    };
+    pc.oniceconnectionstatechange = () => {
+      // Attempt ICE restart on failure before giving up
+      if (pc.iceConnectionState === 'failed') pc.restartIce?.();
     };
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed') { setCallError('連線失敗，請重試'); cleanup(); }
