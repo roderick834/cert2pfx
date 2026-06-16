@@ -3,12 +3,74 @@ import { useAuth } from '../context/AuthContext';
 import { useCall } from '../context/CallContext';
 import { useTheme, THEMES } from '../context/ThemeContext';
 
+// SVG icon pairs: [outline, filled]
+const HomeIcon = ({ filled }) => filled ? (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+  </svg>
+) : (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </svg>
+);
+
+const MemoriesIcon = ({ filled }) => filled ? (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+    <path d="M4 4a2 2 0 012-2h12a2 2 0 012 2v16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v16h12V4H6zm1 9l3-3.5L13 13l2-2 3 3.5" />
+    <path fillRule="evenodd" clipRule="evenodd" d="M6 4h12v16H6V4zm2 9.2l2.5-3 2.5 3 2-2.4 2.5 3.2H8l2-2.8z" />
+    <circle cx="9.5" cy="8.5" r="1.5" />
+  </svg>
+) : (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </svg>
+);
+
+const ChatIcon = ({ filled }) => filled ? (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+    <path d="M20 2H4a2 2 0 00-2 2v13a2 2 0 002 2h3l3 3 3-3h5a2 2 0 002-2V4a2 2 0 00-2-2zM8 10a1 1 0 110-2 1 1 0 010 2zm4 0a1 1 0 110-2 1 1 0 010 2zm4 0a1 1 0 110-2 1 1 0 010 2z" />
+  </svg>
+) : (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+    <circle cx="9" cy="10" r="0.5" fill="currentColor" />
+    <circle cx="12" cy="10" r="0.5" fill="currentColor" />
+    <circle cx="15" cy="10" r="0.5" fill="currentColor" />
+  </svg>
+);
+
+const DatesIcon = ({ filled }) => filled ? (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+    <path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z" />
+  </svg>
+) : (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+    <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
+  </svg>
+);
+
+const ProfileIcon = ({ filled }) => filled ? (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+  </svg>
+) : (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 00-3-3.87" />
+    <path d="M16 3.13a4 4 0 010 7.75" />
+  </svg>
+);
+
 const navItems = [
-  { to: '/', icon: '🏠', label: '首頁' },
-  { to: '/memories', icon: '📷', label: '回憶' },
-  { to: '/chat', icon: '💬', label: '聊天' },
-  { to: '/dates', icon: '💌', label: '紀念日' },
-  { to: '/profile', icon: '💑', label: '我們' },
+  { to: '/', label: '首頁',  Icon: HomeIcon },
+  { to: '/memories', label: '回憶', Icon: MemoriesIcon },
+  { to: '/chat', label: '聊天', Icon: ChatIcon },
+  { to: '/dates', label: '紀念日', Icon: DatesIcon },
+  { to: '/profile', label: '我們', Icon: ProfileIcon },
 ];
 
 export default function Layout() {
@@ -39,7 +101,7 @@ export default function Layout() {
         </div>
       </header>
 
-      {/* Incoming call banner (shown on all pages except /call) */}
+      {/* Incoming call banner */}
       {showIncomingBanner && (
         <div className="sticky top-[57px] z-50 bg-green-600 text-white shadow-lg">
           <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
@@ -51,44 +113,24 @@ export default function Layout() {
               </div>
             </div>
             <div className="flex gap-3">
-              <button
-                onClick={endCall}
-                className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center shadow"
-              >
-                📵
-              </button>
-              <button
-                onClick={() => { answerCall(); navigate('/call'); }}
-                className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shadow"
-              >
-                📞
-              </button>
+              <button onClick={endCall} className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center shadow">📵</button>
+              <button onClick={() => { answerCall(); navigate('/call'); }} className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shadow">📞</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Active call mini-bar (shown when in call but browsing other pages) */}
+      {/* Active call mini-bar */}
       {showActiveMiniBar && (
-        <div
-          className="sticky top-[57px] z-50 bg-gray-800 text-white shadow-lg cursor-pointer"
-          onClick={() => navigate('/call')}
-        >
+        <div className="sticky top-[57px] z-50 bg-gray-800 text-white shadow-lg cursor-pointer" onClick={() => navigate('/call')}>
           <div className="max-w-lg mx-auto px-4 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-sm font-medium">
-                {status === 'calling' ? '撥號中...' : '通話中 ❤️'}
-              </span>
+              <span className="text-sm font-medium">{status === 'calling' ? '撥號中...' : '通話中 ❤️'}</span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs text-gray-400">點擊返回通話</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); endCall(); }}
-                className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-sm"
-              >
-                📵
-              </button>
+              <button onClick={(e) => { e.stopPropagation(); endCall(); }} className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-sm">📵</button>
             </div>
           </div>
         </div>
@@ -99,22 +141,32 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      {/* Bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-rose-100 shadow-lg z-40">
-        <div className="max-w-lg mx-auto flex justify-around items-center py-2">
-          {navItems.map(({ to, icon, label }) => (
+      {/* Bottom nav — modern pill-indicator style */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-1px_12px_rgba(0,0,0,0.07)]">
+        <div className="max-w-lg mx-auto flex justify-around items-center px-2 py-1 pb-safe">
+          {navItems.map(({ to, label, Icon }) => (
             <NavLink
               key={to}
               to={to}
               end={to === '/'}
-              className={({ isActive }) =>
-                `flex flex-col items-center px-3 py-1 rounded-xl transition-all ${
-                  isActive ? 'text-rose-500 bg-rose-50 scale-110' : 'text-gray-400'
-                }`
-              }
+              className="flex-1"
             >
-              <span className="text-xl">{icon}</span>
-              <span className="text-xs mt-0.5 font-medium">{label}</span>
+              {({ isActive }) => (
+                <div className={`flex flex-col items-center gap-0.5 py-2 transition-all duration-200 ${isActive ? 'text-rose-500' : 'text-gray-400'}`}>
+                  {/* Icon with pill background when active */}
+                  <div className={`relative flex items-center justify-center rounded-2xl transition-all duration-200 ${
+                    isActive ? 'bg-rose-50 px-4 py-1' : 'px-4 py-1'
+                  }`}>
+                    <Icon filled={isActive} />
+                  </div>
+                  {/* Label */}
+                  <span className={`text-[10px] font-medium leading-none transition-all ${
+                    isActive ? 'text-rose-500' : 'text-gray-400'
+                  }`}>
+                    {label}
+                  </span>
+                </div>
+              )}
             </NavLink>
           ))}
         </div>
