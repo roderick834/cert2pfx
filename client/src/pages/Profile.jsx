@@ -7,7 +7,7 @@ import api from '../api';
 export default function Profile() {
   const { user, couple, logout, refreshCouple } = useAuth();
   const navigate = useNavigate();
-  const { status: pushStatus, requestPermission } = usePushContext();
+  const { status: pushStatus, errorDetail: pushError, requestPermission } = usePushContext();
   const [pushLoading, setPushLoading] = useState(false);
   const [pushMsg, setPushMsg] = useState('');
 
@@ -32,8 +32,9 @@ export default function Profile() {
     setPushLoading(false);
     if (result === 'granted') setPushMsg('✅ 通知已開啟！');
     else if (result === 'denied') setPushMsg('❌ 已拒絕，請到系統設定手動開啟');
+    else if (result === 'unsupported') setPushMsg('');
     else setPushMsg('開啟失敗，請稍後再試');
-    setTimeout(() => setPushMsg(''), 4000);
+    setTimeout(() => setPushMsg(''), 8000);
   };
 
   const saveNtfy = async () => {
@@ -256,8 +257,8 @@ export default function Profile() {
               <p className="text-xs text-gray-400 mt-0.5">
                 {pushStatus === 'granted' ? '✅ 已開啟' :
                   pushStatus === 'denied' ? '已拒絕（去設定 → Safari → 通知開啟）' :
-                  pushStatus === 'unsupported' ? '不支援（請改用 ntfy）' :
-                  'Chrome / Safari'}
+                  pushStatus === 'unsupported' ? '需先加入主畫面（捷徑圖示）再開啟' :
+                  'Chrome / Safari / 加入主畫面後可用'}
               </p>
             </div>
             {pushStatus !== 'granted' && pushStatus !== 'denied' && (
@@ -268,6 +269,17 @@ export default function Profile() {
             )}
           </div>
           {pushMsg && <p className="text-xs mt-2 text-gray-500">{pushMsg}</p>}
+          {pushStatus === 'error' && pushError && (
+            <p className="text-xs mt-1 text-orange-500">{pushError}</p>
+          )}
+          {pushStatus === 'unsupported' && (
+            <div className="mt-2 bg-amber-50 rounded-xl p-3 text-xs text-gray-600 space-y-0.5">
+              <p className="font-medium text-amber-700">iOS 加入主畫面步驟：</p>
+              <p>1. 點下方工具列 <strong>分享</strong> 圖示 ↑</p>
+              <p>2. 選擇「<strong>加入主畫面</strong>」</p>
+              <p>3. 從桌面圖示開啟 App 再點「開啟」</p>
+            </div>
+          )}
         </div>
 
         {/* ntfy.sh */}

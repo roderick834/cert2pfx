@@ -17,7 +17,7 @@ import Profile from './pages/Profile';
 import Dates from './pages/Dates';
 import { usePush } from './hooks/usePush';
 
-const PushContext = createContext({ status: 'idle', requestPermission: async () => {} });
+const PushContext = createContext({ status: 'idle', errorDetail: '', requestPermission: async () => {} });
 
 const Spinner = () => (
   <div className="min-h-screen flex items-center justify-center bg-rose-50">

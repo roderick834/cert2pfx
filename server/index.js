@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3001;
 // VAPID setup for web push
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || 'BGYDOxblN6Y1gGbS4Nz2HZQtNpAfhZDBaSmIrKNHU-sGbHq9iUkJdZFdDBKRCvCaUWTPxt35RedsDc9hOQOyjqY';
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '5YvMvLMs-zvKrQD_VjOfNACIkX8zZI_bh-Rr1hpMf6Q';
-webpush.setVapidDetails('mailto:together@app.local', VAPID_PUBLIC, VAPID_PRIVATE);
+webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:hafu9911@gmail.com', VAPID_PUBLIC, VAPID_PRIVATE);
 
 // Email transport — only active when SMTP_USER + SMTP_PASS are set
 const mailer = (process.env.SMTP_USER && process.env.SMTP_PASS)
