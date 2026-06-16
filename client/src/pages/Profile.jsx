@@ -7,7 +7,7 @@ import InstallPrompt from '../components/InstallPrompt';
 import api from '../api';
 
 export default function Profile() {
-  const { user, couple, logout, refreshCouple } = useAuth();
+  const { user, couple, logout, refreshCouple, updateUser } = useAuth();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const avatarRef = useRef();
@@ -44,8 +44,8 @@ export default function Profile() {
     } catch {}
   };
 
-  // Avatar
-  const [avatarUrl, setAvatarUrl] = useState(user?.avatar || null);
+  // Avatar — always derive from user in context so it stays in sync
+  const avatarUrl = user?.avatar || null;
   const [avatarLoading, setAvatarLoading] = useState(false);
 
   const handleAvatarUpload = async (e) => {
@@ -56,8 +56,7 @@ export default function Profile() {
       const fd = new FormData();
       fd.append('avatar', file);
       const res = await api.post('/auth/avatar', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setAvatarUrl(res.data.user.avatar);
-      localStorage.setItem('user', JSON.stringify({ ...user, avatar: res.data.user.avatar }));
+      updateUser({ avatar: res.data.user.avatar });
     } catch {}
     setAvatarLoading(false);
     e.target.value = '';

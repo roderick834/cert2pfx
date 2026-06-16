@@ -105,8 +105,14 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const updateUser = (patch) => {
+    const updated = { ...user, ...patch };
+    setUser(updated);
+    localStorage.setItem('user', JSON.stringify(updated));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, couple, loading, login, register, logout, refreshCouple, setCouple }}>
+    <AuthContext.Provider value={{ user, couple, loading, login, register, logout, refreshCouple, setCouple, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
