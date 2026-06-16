@@ -164,7 +164,6 @@ export default function Home() {
   const [showBgPicker, setShowBgPicker] = useState(false);
   const [cropFile, setCropFile] = useState(null);
   const bgUploadRef = useRef();
-  const [heroH, setHeroH] = useState(() => window.innerHeight - 57);
 
   const [partnerNote, setPartnerNote] = useState(null);
   const [myNote, setMyNote] = useState(null);
@@ -172,12 +171,6 @@ export default function Home() {
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [nextDate, setNextDate] = useState(null);
-
-  useEffect(() => {
-    const update = () => setHeroH(window.innerHeight - 57);
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, []);
 
   useEffect(() => {
     if (!couple) return;
@@ -244,7 +237,7 @@ export default function Home() {
       <div
         className="relative flex flex-col items-center justify-center overflow-hidden"
         style={{
-          minHeight: heroH,
+          minHeight: 'calc(var(--app-height, 100vh) - 57px)',
           paddingBottom: '6rem',
           ...bgStyle,
         }}
