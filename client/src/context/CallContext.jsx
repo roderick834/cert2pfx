@@ -6,11 +6,49 @@ const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
   ],
 };
+
+// Pre-render 啵啵啵 ringtone as a looping WAV blob so <audio> can play it
+// in the background (AudioContext gets suspended when app is backgrounded).
+async function buildRingtoneUrl() {
+  const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!Ctx) return null;
+  const sr = 22050;
+  const dur = 1.8; // one 啵啵啵 cycle (3 pops + silence)
+  const ctx = new Ctx(1, Math.ceil(sr * dur), sr);
+  const pop = (t) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(1400, t);
+    o.frequency.exponentialRampToValueAtTime(200, t + 0.1);
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.linearRampToValueAtTime(0.5, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.start(t); o.stop(t + 0.12);
+  };
+  pop(0.0); pop(0.22); pop(0.44);
+  const buf = await ctx.startRendering();
+  const pcm = buf.getChannelData(0);
+  const dataLen = pcm.length * 2;
+  const ab = new ArrayBuffer(44 + dataLen);
+  const dv = new DataView(ab);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); dv.setUint32(4, 36 + dataLen, true);
+  w(8, 'WAVE'); w(12, 'fmt ');
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true);
+  dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  w(36, 'data'); dv.setUint32(40, dataLen, true);
+  for (let i = 0; i < pcm.length; i++)
+    dv.setInt16(44 + i * 2, Math.max(-32767, Math.min(32767, pcm[i] * 32767)) | 0, true);
+  return URL.createObjectURL(new Blob([ab], { type: 'audio/wav' }));
+}
 
 const CallContext = createContext(null);
 
@@ -29,9 +67,14 @@ export function CallProvider({ children }) {
   const remoteStreamRef = useRef(null);
   const pendingCandidates = useRef([]);
   const audioCtxRef = useRef(null);
-  // Persistent <audio> element lives in document.body, not inside any React component.
-  // This means audio keeps playing when the user navigates away from the Call page.
+
+  // Persistent <audio> element for remote call audio.
+  // Lives in document.body so it survives page navigation.
+  // On iOS with getUserMedia active, <audio> routes to earpiece (playAndRecord session).
   const remoteAudioRef = useRef(null);
+  // Separate looping <audio> element for ringtone (can play in background unlike AudioContext)
+  const ringtoneAudioRef = useRef(null);
+
   const localVideoEl = useRef(null);
   const remoteVideoEl = useRef(null);
 
@@ -41,11 +84,43 @@ export function CallProvider({ children }) {
     el.style.display = 'none';
     document.body.appendChild(el);
     remoteAudioRef.current = el;
-    return () => {
-      el.remove();
-      remoteAudioRef.current = null;
-    };
+    return () => { el.remove(); remoteAudioRef.current = null; };
   }, []);
+
+  // Ringtone <audio> element — pre-render WAV and unlock on first user gesture
+  useEffect(() => {
+    const el = document.createElement('audio');
+    el.loop = true;
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    ringtoneAudioRef.current = el;
+
+    buildRingtoneUrl().then(url => {
+      if (url && ringtoneAudioRef.current) ringtoneAudioRef.current.src = url;
+    }).catch(() => {});
+
+    // Unlock on first touch/click so it can play without a gesture later
+    const unlock = () => {
+      const r = ringtoneAudioRef.current;
+      if (r) r.play().then(() => r.pause()).catch(() => {});
+    };
+    document.addEventListener('touchstart', unlock, { once: true, capture: true });
+    document.addEventListener('click', unlock, { once: true, capture: true });
+
+    return () => { el.remove(); ringtoneAudioRef.current = null; };
+  }, []);
+
+  const stopRingtone = () => {
+    const r = ringtoneAudioRef.current;
+    if (r && !r.paused) { r.pause(); r.currentTime = 0; }
+  };
+
+  const startRingtone = () => {
+    const r = ringtoneAudioRef.current;
+    if (!r || !r.src) return;
+    r.currentTime = 0;
+    r.play().catch(() => {});
+  };
 
   const attachStreams = useCallback(() => {
     if (localVideoEl.current && localStreamRef.current) {
@@ -66,7 +141,7 @@ export function CallProvider({ children }) {
   const remoteVideoRef = useCallback((el) => {
     remoteVideoEl.current = el;
     if (el && remoteStreamRef.current) {
-      el.muted = true; // audio handled by remoteAudioRef
+      el.muted = true; // audio handled by remoteAudioRef audio element
       el.srcObject = remoteStreamRef.current;
       el.play().catch(() => {});
     }
@@ -87,6 +162,7 @@ export function CallProvider({ children }) {
       remoteAudioRef.current.srcObject = null;
       remoteAudioRef.current.muted = false;
     }
+    stopRingtone();
     setStatus('idle');
     setIncomingData(null);
     setCallError('');
@@ -100,18 +176,21 @@ export function CallProvider({ children }) {
     }
   };
 
+  const coupleId = couple?.couple?.id;
   useEffect(() => {
-    if (!socket || !couple) return;
-    socket.emit('join-couple-room', couple.couple.id);
+    if (!socket || !coupleId) return;
+    socket.emit('join-couple-room', coupleId);
 
     const onIncoming = (data) => {
       setIncomingData(data);
       setCallType(data.callType || 'audio');
       setStatus('incoming');
+      startRingtone();
     };
 
     const onAnswered = async ({ answer }) => {
       if (!pcRef.current) return;
+      stopRingtone(); // caller side: stop ringing as soon as partner picks up
       try {
         await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer));
         await drainCandidates();
@@ -138,7 +217,7 @@ export function CallProvider({ children }) {
       socket.off('webrtc-ice-candidate', onICE);
       socket.off('call-ended', cleanup);
     };
-  }, [socket, couple, cleanup]);
+  }, [socket, coupleId, cleanup]);
 
   const buildPC = (stream) => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
@@ -146,12 +225,12 @@ export function CallProvider({ children }) {
     pc.ontrack = (e) => {
       const remote = e.streams[0] || new MediaStream([e.track]);
       remoteStreamRef.current = remote;
-      // Audio → persistent element in document.body (survives navigation)
+      // Audio → persistent <audio> element (earpiece on iOS via playAndRecord session)
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = remote;
         remoteAudioRef.current.play().catch(() => {});
       }
-      // Video → React video element (muted — no double audio)
+      // Video → visible React video element (muted — audio handled above)
       if (remoteVideoEl.current) {
         remoteVideoEl.current.muted = true;
         remoteVideoEl.current.srcObject = remote;
@@ -160,6 +239,9 @@ export function CallProvider({ children }) {
     };
     pc.onicecandidate = (e) => {
       if (e.candidate && socket) socket.emit('webrtc-ice-candidate', { candidate: e.candidate });
+    };
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'failed') pc.restartIce?.();
     };
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed') { setCallError('連線失敗，請重試'); cleanup(); }
@@ -178,7 +260,16 @@ export function CallProvider({ children }) {
 
   const startCall = async (type) => {
     if (!socket || !couple) return;
-    setCallError(''); setCallType(type); setStatus('calling');
+    setCallError(''); setCallType(type);
+    // Unlock ringtone in user-gesture context so it can play later (iOS Safari).
+    // Do NOT pre-play remoteAudioRef here — playing it in a gesture handler locks
+    // iOS into "media playback" speaker routing; instead let it play via autoplay
+    // when the stream arrives (iOS exempts WebRTC streams from autoplay blocking).
+    if (ringtoneAudioRef.current) {
+      ringtoneAudioRef.current.play().then(() => { if (ringtoneAudioRef.current) ringtoneAudioRef.current.pause(); }).catch(() => {});
+    }
+    setStatus('calling');
+    startRingtone();
     try {
       const stream = await getMedia(type === 'video');
       localStreamRef.current = stream;
@@ -196,6 +287,9 @@ export function CallProvider({ children }) {
   const answerCall = async () => {
     if (!socket || !incomingData) return;
     setCallError('');
+    stopRingtone();
+    // Do NOT pre-play remoteAudioRef here — same reason as startCall:
+    // gesture-context play locks iOS into speaker routing for that element.
     try {
       const stream = await getMedia(callType === 'video');
       localStreamRef.current = stream;
@@ -227,24 +321,28 @@ export function CallProvider({ children }) {
     setIsSpeaker(next);
 
     if (next) {
-      // Speaker: AudioContext forces audio to loudspeaker (works on iOS Safari)
+      // Speaker: mute <audio> first, then AudioContext routes to loudspeaker
+      audioEl.muted = true;
       if (!audioCtxRef.current) {
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (Ctx) {
           const ctx = new Ctx();
-          const src = ctx.createMediaStreamSource(stream);
-          src.connect(ctx.destination);
+          ctx.createMediaStreamSource(stream).connect(ctx.destination);
           audioCtxRef.current = ctx;
-          audioEl.muted = true; // AudioContext handles output now
         }
       }
     } else {
-      // Earpiece: close AudioContext, let audio element output normally
+      // Earpiece: close AudioContext, then null-reset srcObject so iOS
+      // re-evaluates AVAudioSession output port (earpiece in playAndRecord mode).
       if (audioCtxRef.current) {
-        audioCtxRef.current.close();
+        try { await audioCtxRef.current.close(); } catch {}
         audioCtxRef.current = null;
       }
       audioEl.muted = false;
+      audioEl.pause();
+      audioEl.srcObject = null;
+      // Brief gap lets iOS commit the routing change before we re-attach stream
+      await new Promise(r => setTimeout(r, 80));
       audioEl.srcObject = stream;
       audioEl.play().catch(() => {});
     }

@@ -156,6 +156,9 @@ function getCoupleId(userId) {
 }
 
 // Helper: send ntfy.sh notification
+// In-memory store for pending calls (cleared on answer/end, re-sent on reconnect)
+const pendingCalls = new Map(); // coupleId → { offer, callType, from, fromId, ts }
+
 async function sendNtfy(userId, title, body, tags = '') {
   const row = db.prepare('SELECT ntfy_topic FROM users WHERE id = ?').get(userId);
   if (!row?.ntfy_topic) return;
@@ -175,9 +178,7 @@ function isUserOnline(userId) {
   return [...io.sockets.sockets.values()].some(s => s.user?.id === userId);
 }
 
-function sendPush(userId, payload) {
-  // Don't push if user is actively connected — they get real-time updates
-  if (isUserOnline(userId)) return;
+function _sendPushRaw(userId, payload) {
   const subs = db.prepare('SELECT subscription FROM push_subscriptions WHERE user_id = ?').all(userId);
   const body = JSON.stringify(payload);
   subs.forEach(({ subscription }) => {
@@ -190,6 +191,17 @@ function sendPush(userId, payload) {
   });
 }
 
+function sendPush(userId, payload) {
+  // Don't push if user is actively connected — they get real-time updates
+  if (isUserOnline(userId)) return;
+  _sendPushRaw(userId, payload);
+}
+
+// For calls: always push even if online (app may be backgrounded)
+function sendCallPush(userId, payload) {
+  _sendPushRaw(userId, payload);
+}
+
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.user.username} (${socket.id})`);
 
@@ -198,6 +210,11 @@ io.on('connection', (socket) => {
     socket.join(coupleId);
     console.log(`${socket.user.username} joined room: ${coupleId}`);
     socket.to(coupleId).emit('partner-status', { userId: socket.user.id, online: true });
+    // Re-emit pending call if callee missed the original event (e.g. app was backgrounded)
+    const pending = pendingCalls.get(String(coupleId));
+    if (pending && pending.fromId !== socket.user.id && Date.now() - pending.ts < 90000) {
+      socket.emit('incoming-call', { from: pending.from, fromId: pending.fromId, offer: pending.offer, callType: pending.callType });
+    }
   });
 
   // Send message
@@ -247,6 +264,9 @@ io.on('connection', (socket) => {
     const userId = socket.user.id;
     const coupleRow = db.prepare('SELECT * FROM couples WHERE user1_id = ? OR user2_id = ?').get(userId, userId);
     if (!coupleRow) return;
+    const coupleKey = String(coupleRow.id);
+    // Store pending call so callee can receive it if they reconnect within 90s
+    pendingCalls.set(coupleKey, { offer: data.offer, callType: data.callType, from: socket.user.username, fromId: userId, ts: Date.now() });
     socket.to(coupleRow.id).emit('incoming-call', {
       from: socket.user.username,
       fromId: userId,
@@ -257,9 +277,10 @@ io.on('connection', (socket) => {
     if (partnerId) {
       const partner = db.prepare('SELECT email FROM users WHERE id = ?').get(partnerId);
       if (partner?.email) sendCallEmail(partner.email, socket.user.username, data.callType);
-      // Push notification for incoming call
+      // Push notification for incoming call — always send even if partner is online
+      // (app may be backgrounded so they'd miss the socket event)
       const callBody = data.callType === 'video' ? '點擊接聽視訊通話' : '點擊接聽語音通話';
-      sendPush(partnerId, { title: `📞 ${socket.user.username} 正在呼叫你`, body: callBody, tag: 'call', url: '/call' });
+      sendCallPush(partnerId, { title: `📞 ${socket.user.username} 正在呼叫你`, body: callBody, tag: 'call', url: '/call' });
       sendNtfy(partnerId, `📞 ${socket.user.username} 正在呼叫你`, callBody, 'telephone_receiver');
     }
   });
@@ -267,6 +288,7 @@ io.on('connection', (socket) => {
   socket.on('answer-call', (data) => {
     const coupleId = getCoupleId(socket.user.id);
     if (coupleId) {
+      pendingCalls.delete(String(coupleId));
       socket.to(coupleId).emit('call-answered', data);
     }
   });
@@ -274,6 +296,7 @@ io.on('connection', (socket) => {
   socket.on('end-call', () => {
     const coupleId = getCoupleId(socket.user.id);
     if (coupleId) {
+      pendingCalls.delete(String(coupleId));
       socket.to(coupleId).emit('call-ended');
     }
   });
@@ -298,10 +321,12 @@ io.on('connection', (socket) => {
     const coupleId = getCoupleId(userId);
     if (!coupleId) return;
     const now = new Date().toISOString();
-    db.prepare(
+    const result = db.prepare(
       'UPDATE messages SET read_at = ? WHERE couple_id = ? AND sender_id != ? AND read_at IS NULL'
     ).run(now, coupleId, userId);
-    socket.to(coupleId).emit('messages-read', { read_at: now });
+    if (result.changes > 0) {
+      socket.to(coupleId).emit('messages-read', { read_at: now });
+    }
   });
 
   socket.on('webrtc-ice-candidate', (data) => {
@@ -316,6 +341,9 @@ io.on('connection', (socket) => {
     // Notify couple partner if in a call
     const coupleId = getCoupleId(socket.user.id);
     if (coupleId) {
+      // If the caller disconnects, clear the pending call
+      const pending = pendingCalls.get(String(coupleId));
+      if (pending && pending.fromId === socket.user.id) pendingCalls.delete(String(coupleId));
       socket.to(coupleId).emit('call-ended');
       socket.to(coupleId).emit('partner-status', { userId: socket.user.id, online: false });
     }

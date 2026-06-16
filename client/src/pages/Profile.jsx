@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePushContext } from '../App';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import InstallPrompt from '../components/InstallPrompt';
+import ImageCropTool from '../components/ImageCropTool';
 import api from '../api';
 
 export default function Profile() {
@@ -21,6 +23,11 @@ export default function Profile() {
   const [ntfyEditing, setNtfyEditing] = useState(false);
   const [ntfySaving, setNtfySaving] = useState(false);
   const [ntfyMsg, setNtfyMsg] = useState('');
+
+  // Call permissions state
+  const [permState, setPermState] = useState({ mic: 'unknown', camera: 'unknown' });
+  const [permLoading, setPermLoading] = useState(false);
+  const [permMsg, setPermMsg] = useState('');
 
   // Device tokens state
   const [devices, setDevices] = useState([]);
@@ -64,20 +71,28 @@ export default function Profile() {
   const avatarUrl = user?.avatar || null;
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [avatarError, setAvatarError] = useState('');
+  const [cropAvatarFile, setCropAvatarFile] = useState(null);
 
-  const handleAvatarUpload = async (e) => {
+  const handleAvatarUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setCropAvatarFile(file);
+    e.target.value = '';
+  };
+
+  const handleAvatarCropSave = async (dataUrl) => {
+    setCropAvatarFile(null);
     setAvatarLoading(true);
     setAvatarError('');
     try {
+      const fetchRes = await fetch(dataUrl);
+      const blob = await fetchRes.blob();
       const fd = new FormData();
-      fd.append('avatar', file);
-      // Do NOT manually set Content-Type — axios sets it with boundary automatically for FormData
-      const res = await api.post('/auth/avatar', fd);
+      fd.append('avatar', blob, 'avatar.jpg');
+      const res = await api.post('/auth/avatar', fd, { timeout: 120000 });
       if (res.data?.user?.avatar) {
         updateUser({ avatar: res.data.user.avatar });
-        refreshCouple(); // refresh couple.me.avatar so Home page shows the new photo
+        refreshCouple();
       } else {
         setAvatarError('上傳成功但路徑錯誤');
       }
@@ -85,7 +100,6 @@ export default function Profile() {
       setAvatarError(err.response?.data?.error || '上傳失敗，請重試');
     }
     setAvatarLoading(false);
-    e.target.value = '';
   };
 
   useEffect(() => {
@@ -95,6 +109,37 @@ export default function Profile() {
       setNtfyInput(r.data.topic || '');
     }).catch(() => {});
   }, [user]);
+
+  useEffect(() => {
+    if (!navigator.permissions) return;
+    Promise.all([
+      navigator.permissions.query({ name: 'microphone' }).catch(() => ({ state: 'unknown' })),
+      navigator.permissions.query({ name: 'camera' }).catch(() => ({ state: 'unknown' })),
+    ]).then(([mic, cam]) => setPermState({ mic: mic.state, camera: cam.state }));
+  }, []);
+
+  const requestCallPermissions = async () => {
+    setPermLoading(true); setPermMsg('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      stream.getTracks().forEach(t => t.stop());
+      setPermState({ mic: 'granted', camera: 'granted' });
+      setPermMsg('✅ 已授權麥克風 & 鏡頭');
+    } catch {
+      // Fallback: try audio only
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+        s.getTracks().forEach(t => t.stop());
+        setPermState({ mic: 'granted', camera: 'denied' });
+        setPermMsg('✅ 麥克風已授權，鏡頭被拒絕');
+      } catch {
+        setPermState({ mic: 'denied', camera: 'denied' });
+        setPermMsg('❌ 已拒絕，請到系統設定手動開啟');
+      }
+    }
+    setPermLoading(false);
+    setTimeout(() => setPermMsg(''), 6000);
+  };
 
   const handleEnablePush = async () => {
     setPushLoading(true);
@@ -465,6 +510,37 @@ export default function Profile() {
         </div>
       </div>
 
+      {/* Call Permissions */}
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-700">📞 通話權限</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {permState.mic === 'granted' && permState.camera === 'granted'
+                  ? '✅ 麥克風 & 鏡頭已授權'
+                  : permState.mic === 'granted'
+                  ? '✅ 麥克風已授權，鏡頭未授權'
+                  : permState.mic === 'denied' || permState.camera === 'denied'
+                  ? '❌ 已拒絕，請到設定 → Safari → 麥克風/鏡頭 開啟'
+                  : '語音通話需要麥克風，視訊通話需要鏡頭'}
+              </p>
+            </div>
+            {!(permState.mic === 'denied' || permState.camera === 'denied') &&
+             !(permState.mic === 'granted' && permState.camera === 'granted') && (
+              <button
+                onClick={requestCallPermissions}
+                disabled={permLoading}
+                className="bg-rose-500 text-white text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-60"
+              >
+                {permLoading ? '請求中...' : '授權'}
+              </button>
+            )}
+          </div>
+          {permMsg && <p className="text-xs mt-2 text-gray-500">{permMsg}</p>}
+        </div>
+      </div>
+
       {/* Bound Devices */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
         <button
@@ -523,6 +599,15 @@ export default function Profile() {
         className="w-full border-2 border-red-200 text-red-400 hover:bg-red-50 font-semibold py-3 rounded-xl transition-all text-sm">
         登出
       </button>
+
+      {cropAvatarFile && createPortal(
+        <ImageCropTool
+          file={cropAvatarFile}
+          onSave={handleAvatarCropSave}
+          onCancel={() => setCropAvatarFile(null)}
+        />,
+        document.body
+      )}
     </div>
   );
 }
