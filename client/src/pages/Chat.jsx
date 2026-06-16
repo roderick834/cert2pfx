@@ -57,9 +57,10 @@ export default function Chat() {
   }, [socket, couple]);
 
   // Mark messages as read when chat opens
+  const coupleId = couple?.couple?.id;
   useEffect(() => {
-    if (socket && couple) socket.emit('mark-read');
-  }, [socket, couple]);
+    if (socket && coupleId) socket.emit('mark-read');
+  }, [socket, coupleId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

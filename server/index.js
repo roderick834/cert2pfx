@@ -311,10 +311,12 @@ io.on('connection', (socket) => {
     const coupleId = getCoupleId(userId);
     if (!coupleId) return;
     const now = new Date().toISOString();
-    db.prepare(
+    const result = db.prepare(
       'UPDATE messages SET read_at = ? WHERE couple_id = ? AND sender_id != ? AND read_at IS NULL'
     ).run(now, coupleId, userId);
-    socket.to(coupleId).emit('messages-read', { read_at: now });
+    if (result.changes > 0) {
+      socket.to(coupleId).emit('messages-read', { read_at: now });
+    }
   });
 
   socket.on('webrtc-ice-candidate', (data) => {
