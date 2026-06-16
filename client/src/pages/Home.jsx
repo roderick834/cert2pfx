@@ -231,13 +231,13 @@ export default function Home() {
     : null;
 
   return (
-    // -mb-20 cancels the pb-20 on <main> so the hero extends to screen bottom
-    <div className="-mb-20">
+    // -mb-28 cancels the pb-28 on <main> so the hero extends to screen bottom
+    <div className="-mb-28">
       {/* Full-screen hero */}
       <div
         className="relative flex flex-col items-center justify-center overflow-hidden"
         style={{
-          minHeight: 'calc(100svh - 3rem)',
+          minHeight: 'calc(100vh - 57px)',
           paddingBottom: '6rem',
           ...bgStyle,
         }}
