@@ -8,39 +8,37 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 
-// Only require serviceWorker + Notification — PushManager checked dynamically
-// because Safari exposes it on registration, not on window
-const basicSupport = typeof window !== 'undefined'
-  && 'serviceWorker' in navigator
-  && 'Notification' in window;
-
 export function usePush(user) {
-  const [status, setStatus] = useState('idle'); // idle | granted | denied | unsupported
+  // 'idle' | 'granted' | 'denied' | 'unsupported' | 'error'
+  const [status, setStatus] = useState('idle');
 
   useEffect(() => {
-    if (!user || !basicSupport) { setStatus('unsupported'); return; }
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-    const p = Notification.permission;
-    if (p === 'granted') setStatus('granted');
-    else if (p === 'denied') setStatus('denied');
-    else setStatus('idle');
+    if (!user) return;
+    // Register SW silently — no permission prompt
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+    // Reflect existing permission state
+    if (typeof Notification !== 'undefined') {
+      if (Notification.permission === 'granted') setStatus('granted');
+      else if (Notification.permission === 'denied') setStatus('denied');
+    }
   }, [user]);
 
-  // Re-upload existing subscription after page refresh
+  // Re-upload subscription if already granted
   useEffect(() => {
     if (status !== 'granted' || !user) return;
     (async () => {
       try {
         const reg = await navigator.serviceWorker.ready;
-        if (!reg.pushManager) return;
-        const existing = await reg.pushManager.getSubscription();
-        if (existing) await api.post('/push/subscribe', existing.toJSON()).catch(() => {});
-        else {
+        const pm = reg.pushManager;
+        if (!pm) return;
+        const existing = await pm.getSubscription();
+        if (existing) {
+          await api.post('/push/subscribe', existing.toJSON()).catch(() => {});
+        } else {
           const { data } = await api.get('/push/vapid-public-key');
-          const sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(data.key),
-          });
+          const sub = await pm.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(data.key) });
           await api.post('/push/subscribe', sub.toJSON());
         }
       } catch {}
@@ -48,27 +46,29 @@ export function usePush(user) {
   }, [status, user]);
 
   const requestPermission = useCallback(async () => {
-    if (!basicSupport) return 'unsupported';
     try {
-      const reg = await navigator.serviceWorker.ready;
-      if (!reg.pushManager) { setStatus('unsupported'); return 'unsupported'; }
+      if (!('serviceWorker' in navigator)) return 'unsupported';
 
-      const perm = await Notification.requestPermission();
+      const reg = await navigator.serviceWorker.ready;
+      const pm = reg.pushManager;
+      if (!pm) return 'unsupported';
+
+      // Request notification permission (must be from user gesture)
+      const NotifAPI = window.Notification || Notification;
+      const perm = await NotifAPI.requestPermission();
       if (perm !== 'granted') { setStatus('denied'); return perm; }
 
       const { data } = await api.get('/push/vapid-public-key');
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(data.key),
-      });
+      const sub = await pm.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(data.key) });
       await api.post('/push/subscribe', sub.toJSON());
       setStatus('granted');
       return 'granted';
     } catch (err) {
       console.warn('Push failed:', err.message);
+      setStatus('error');
       return 'error';
     }
   }, []);
 
-  return { status, requestPermission, supported: basicSupport };
+  return { status, requestPermission };
 }

@@ -7,7 +7,7 @@ import api from '../api';
 export default function Profile() {
   const { user, couple, logout, refreshCouple } = useAuth();
   const navigate = useNavigate();
-  const { status: pushStatus, requestPermission, supported: pushSupported } = usePushContext();
+  const { status: pushStatus, requestPermission } = usePushContext();
   const [pushLoading, setPushLoading] = useState(false);
   const [pushMsg, setPushMsg] = useState('');
 
@@ -255,12 +255,12 @@ export default function Profile() {
               <p className="text-sm font-medium text-gray-700">瀏覽器推播</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {pushStatus === 'granted' ? '✅ 已開啟' :
-                  pushStatus === 'denied' ? '已拒絕（請到系統設定開啟）' :
-                  pushStatus === 'unsupported' ? '此裝置不支援' :
-                  'Chrome / Safari（iOS 16.4+）'}
+                  pushStatus === 'denied' ? '已拒絕（去設定 → Safari → 通知開啟）' :
+                  pushStatus === 'unsupported' ? '不支援（請改用 ntfy）' :
+                  'Chrome / Safari'}
               </p>
             </div>
-            {pushStatus === 'idle' && (
+            {pushStatus !== 'granted' && pushStatus !== 'denied' && (
               <button onClick={handleEnablePush} disabled={pushLoading}
                 className="bg-rose-500 text-white text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-60">
                 {pushLoading ? '開啟中...' : '開啟'}
