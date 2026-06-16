@@ -1,11 +1,25 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePushContext } from '../App';
 import api from '../api';
 
 export default function Profile() {
   const { user, couple, logout, refreshCouple } = useAuth();
   const navigate = useNavigate();
+  const { status: pushStatus, requestPermission, supported: pushSupported } = usePushContext();
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushMsg, setPushMsg] = useState('');
+
+  const handleEnablePush = async () => {
+    setPushLoading(true);
+    const result = await requestPermission();
+    setPushLoading(false);
+    if (result === 'granted') setPushMsg('✅ 通知已開啟！');
+    else if (result === 'denied') setPushMsg('❌ 已拒絕，請到系統設定手動開啟');
+    else setPushMsg('開啟失敗，請稍後再試');
+    setTimeout(() => setPushMsg(''), 4000);
+  };
   const [mode, setMode] = useState(null);
   const [coupleDate, setCoupleDate] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -197,6 +211,30 @@ export default function Profile() {
           ))}
         </div>
       )}
+
+      {/* Push notifications */}
+      <div className="bg-white rounded-2xl shadow-sm p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-gray-700 text-sm">推播通知</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {!pushSupported ? '此裝置不支援' :
+                pushStatus === 'granted' ? '✅ 已開啟' :
+                pushStatus === 'denied' ? '❌ 已拒絕（請到系統設定開啟）' :
+                '收到訊息和來電時通知你'}
+            </p>
+          </div>
+          {pushSupported && pushStatus !== 'granted' && pushStatus !== 'denied' && (
+            <button
+              onClick={handleEnablePush}
+              disabled={pushLoading}
+              className="bg-rose-500 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-60">
+              {pushLoading ? '開啟中...' : '開啟通知'}
+            </button>
+          )}
+        </div>
+        {pushMsg && <p className="text-sm mt-3 text-gray-500">{pushMsg}</p>}
+      </div>
 
       <button onClick={() => { logout(); navigate('/login'); }}
         className="w-full border-2 border-red-200 text-red-400 hover:bg-red-50 font-semibold py-3 rounded-xl transition-all text-sm">

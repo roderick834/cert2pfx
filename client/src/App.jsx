@@ -16,6 +16,9 @@ import StickerMaker from './pages/StickerMaker';
 import Profile from './pages/Profile';
 import Dates from './pages/Dates';
 import { usePush } from './hooks/usePush';
+import React, { createContext, useContext } from 'react';
+
+const PushContext = createContext({ status: 'idle', requestPermission: async () => {}, supported: false });
 
 const Spinner = () => (
   <div className="min-h-screen flex items-center justify-center bg-rose-50">
@@ -31,12 +34,15 @@ function RequireAuth() {
   return <Layout />;
 }
 
+export function usePushContext() { return useContext(PushContext); }
+
 function AppRoutes() {
   const { user, couple, loading } = useAuth();
-  usePush(user);
+  const push = usePush(user);
   if (loading) return <Spinner />;
 
   return (
+    <PushContext.Provider value={push}>
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
@@ -59,6 +65,7 @@ function AppRoutes() {
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </PushContext.Provider>
   );
 }
 
