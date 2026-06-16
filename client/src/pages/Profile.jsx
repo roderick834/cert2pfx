@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePushContext } from '../App';
+import { useTheme, THEMES } from '../context/ThemeContext';
 import InstallPrompt from '../components/InstallPrompt';
 import api from '../api';
 
 export default function Profile() {
   const { user, couple, logout, refreshCouple } = useAuth();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
+  const avatarRef = useRef();
   const { status: pushStatus, errorDetail: pushError, requestPermission } = usePushContext();
   const [pushLoading, setPushLoading] = useState(false);
   const [pushMsg, setPushMsg] = useState('');
@@ -39,6 +42,25 @@ export default function Profile() {
       await api.delete(`/auth/device-tokens/${id}`);
       setDevices(d => d.filter(x => x.id !== id));
     } catch {}
+  };
+
+  // Avatar
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatar || null);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append('avatar', file);
+      const res = await api.post('/auth/avatar', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setAvatarUrl(res.data.user.avatar);
+      localStorage.setItem('user', JSON.stringify({ ...user, avatar: res.data.user.avatar }));
+    } catch {}
+    setAvatarLoading(false);
+    e.target.value = '';
   };
 
   useEffect(() => {
@@ -122,8 +144,24 @@ export default function Profile() {
     <div className="px-4 py-6 space-y-4">
       {/* User info card */}
       <div className="bg-white rounded-2xl shadow-sm p-5 flex items-center gap-4">
-        <div className="w-14 h-14 bg-gradient-to-br from-rose-400 to-pink-500 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-md">
-          {user?.username?.[0]?.toUpperCase() || '?'}
+        <div className="relative">
+          <button
+            onClick={() => avatarRef.current.click()}
+            disabled={avatarLoading}
+            className="w-16 h-16 rounded-full overflow-hidden shadow-md ring-2 ring-rose-200 flex-shrink-0 relative"
+          >
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center text-white text-2xl font-bold">
+                {user?.username?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 active:opacity-100 transition-opacity">
+              <span className="text-white text-lg">{avatarLoading ? '⏳' : '📷'}</span>
+            </div>
+          </button>
+          <input ref={avatarRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
         </div>
         <div>
           <p className="text-lg font-bold text-gray-800">{user?.username}</p>
@@ -267,6 +305,29 @@ export default function Profile() {
 
       {/* Install App */}
       <InstallPrompt />
+
+      {/* Theme picker */}
+      <div className="bg-white rounded-2xl shadow-sm p-5">
+        <p className="font-semibold text-gray-700 text-sm mb-3">🎨 佈景主題</p>
+        <div className="grid grid-cols-3 gap-3">
+          {THEMES.map(t => (
+            <button key={t.id} onClick={() => setTheme(t.id)}
+              className={`relative rounded-2xl overflow-hidden h-20 flex flex-col items-center justify-center gap-1 border-2 transition-all ${
+                theme === t.id ? 'border-gray-700 scale-105 shadow-md' : 'border-transparent'
+              }`}
+              style={{ backgroundColor: t.light }}
+            >
+              <div className="w-8 h-8 rounded-full shadow-sm" style={{ backgroundColor: t.primary }} />
+              <span className="text-xs font-medium text-gray-600">{t.name}</span>
+              {theme === t.id && (
+                <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-gray-800 flex items-center justify-center">
+                  <span className="text-white text-[8px]">✓</span>
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Notifications */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">

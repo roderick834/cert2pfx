@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCall } from '../context/CallContext';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, THEMES } from '../context/ThemeContext';
 
 const navItems = [
   { to: '/', icon: '🏠', label: '首頁' },
@@ -12,15 +12,17 @@ const navItems = [
 ];
 
 export default function Layout() {
-  const { user, couple } = useAuth();
+  const { couple } = useAuth();
   const { status, callType, incomingData, answerCall, endCall } = useCall();
-  const { dark, toggleDark } = useTheme();
+  const { theme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
 
   const onCallPage = location.pathname === '/call';
   const showIncomingBanner = status === 'incoming' && !onCallPage;
   const showActiveMiniBar = (status === 'connected' || status === 'calling') && !onCallPage;
+
+  const currentTheme = THEMES.find(t => t.id === theme);
 
   return (
     <div className="flex flex-col min-h-screen bg-rose-50">
@@ -33,13 +35,7 @@ export default function Layout() {
               在一起 {couple.daysTogether} 天 ❤️
             </span>
           )}
-          <button
-            onClick={toggleDark}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-lg bg-gray-100 dark:bg-gray-700 transition-colors"
-            aria-label="切換深色模式"
-          >
-            {dark ? '☀️' : '🌙'}
-          </button>
+          <span className="text-lg" title={currentTheme?.name}>{currentTheme?.emoji || '🌹'}</span>
         </div>
       </header>
 

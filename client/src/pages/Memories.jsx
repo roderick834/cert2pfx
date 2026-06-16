@@ -5,10 +5,26 @@ import api from '../api';
 const TYPE_LABELS = { photo: '照片', video: '影片', text: '文字' };
 const TYPE_ICONS  = { photo: '📷', video: '🎬', text: '📝' };
 
+function formatDateHeader(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const weekDays = ['週日','週一','週二','週三','週四','週五','週六'];
+  return d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' })
+    + ' ' + weekDays[d.getDay()];
+}
+
+function groupByDate(memories) {
+  const groups = {};
+  memories.forEach(m => {
+    const d = (m.date || m.created_at || '').split('T')[0];
+    if (!groups[d]) groups[d] = [];
+    groups[d].push(m);
+  });
+  return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+}
+
 function PhotoViewer({ files }) {
   const [idx, setIdx] = useState(0);
   const touchX = useRef(null);
-
   const prev = () => setIdx(i => Math.max(0, i - 1));
   const next = () => setIdx(i => Math.min(files.length - 1, i + 1));
   const onTouchStart = (e) => { touchX.current = e.touches[0].clientX; };
@@ -18,9 +34,7 @@ function PhotoViewer({ files }) {
     if (Math.abs(diff) > 40) diff > 0 ? next() : prev();
     touchX.current = null;
   };
-
-  if (files.length === 0) return null;
-
+  if (!files.length) return null;
   return (
     <div className="relative w-full h-full bg-black select-none"
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
@@ -49,23 +63,17 @@ function PhotoViewer({ files }) {
 function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(memory.content || '');
-  const [editDate, setEditDate] = useState(
-    memory.date ? memory.date.split('T')[0] : (memory.created_at || '').split('T')[0]
-  );
+  const [editDate, setEditDate] = useState((memory.date || memory.created_at || '').split('T')[0]);
   const [saving, setSaving] = useState(false);
   const [addingFiles, setAddingFiles] = useState(false);
   const [localFiles, setLocalFiles] = useState(memory.files || []);
-  const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const addFileRef = useRef();
 
   const isPhoto = memory.type === 'photo';
   const isVideo = memory.type === 'video';
   const hasMedia = (isPhoto || isVideo) && localFiles.length > 0;
-
-  const dateStr = new Date(editDate || memory.created_at).toLocaleDateString('zh-TW', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  });
 
   const handleSave = async () => {
     setSaving(true);
@@ -106,28 +114,22 @@ function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
-      {/* Header */}
       <div className="flex-shrink-0 bg-black/80 backdrop-blur-sm px-4 py-3 flex items-center gap-2">
-        <span className="text-white/70 text-sm flex-1 truncate">{TYPE_ICONS[memory.type]} {dateStr}</span>
+        <span className="text-white/70 text-sm flex-1 truncate">{TYPE_ICONS[memory.type]} {formatDateHeader(editDate)}</span>
         <button onClick={() => { setEditing(e => !e); setConfirmDelete(false); }}
-          className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white text-base">
+          className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white">
           {editing ? '✕' : '✏️'}
         </button>
-        <button onClick={onClose}
-          className="w-8 h-8 flex items-center justify-center text-white text-xl">✕</button>
+        <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-white text-xl">✕</button>
       </div>
 
-      {/* Media area */}
       {hasMedia && !editing && (
-        <div className={editContent || editing ? 'flex-1 min-h-0' : 'flex-1'}>
+        <div className={editContent ? 'flex-1 min-h-0' : 'flex-1'}>
           {isPhoto && <PhotoViewer files={localFiles} />}
-          {isVideo && (
-            <video src={localFiles[0]} controls className="w-full h-full object-contain bg-black" playsInline />
-          )}
+          {isVideo && <video src={localFiles[0]} controls className="w-full h-full object-contain bg-black" playsInline />}
         </div>
       )}
 
-      {/* Caption (view mode) */}
       {!editing && editContent && (
         <div className={`flex-shrink-0 px-4 py-4 ${hasMedia ? 'bg-black/80 backdrop-blur-sm max-h-40 overflow-y-auto border-t border-white/10' : 'flex-1 overflow-y-auto'}`}>
           <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">{editContent}</p>
@@ -138,29 +140,19 @@ function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
         <div className="flex-1 flex items-center justify-center text-white/40 text-sm">無內容</div>
       )}
 
-      {/* Edit panel */}
       {editing && (
         <div className="flex-1 overflow-y-auto bg-gray-900 px-4 py-4 space-y-3">
-          {/* Date */}
           <div>
             <label className="text-xs text-white/50 mb-1 block">日期</label>
             <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
-              className="w-full bg-gray-800 text-white rounded-xl px-3 py-2.5 text-sm border border-white/10 focus:outline-none focus:ring-2 focus:ring-rose-500" />
+              className="w-full bg-gray-800 text-white rounded-xl px-3 py-2.5 text-sm border border-white/10 focus:outline-none" />
           </div>
-
-          {/* Caption */}
           <div>
             <label className="text-xs text-white/50 mb-1 block">說明文字</label>
-            <textarea
-              value={editContent}
-              onChange={e => setEditContent(e.target.value)}
-              rows={4}
+            <textarea value={editContent} onChange={e => setEditContent(e.target.value)} rows={4}
               placeholder="寫下這個回憶..."
-              className="w-full bg-gray-800 text-white rounded-xl px-3 py-2.5 text-sm border border-white/10 focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none"
-            />
+              className="w-full bg-gray-800 text-white rounded-xl px-3 py-2.5 text-sm border border-white/10 focus:outline-none resize-none" />
           </div>
-
-          {/* Photo thumbnails */}
           {isPhoto && localFiles.length > 0 && (
             <div>
               <label className="text-xs text-white/50 mb-2 block">目前照片（{localFiles.length} 張）</label>
@@ -171,27 +163,19 @@ function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
               </div>
             </div>
           )}
-
-          {/* Add more photos */}
           {isPhoto && (
             <>
-              <button
-                onClick={() => addFileRef.current.click()}
-                disabled={addingFiles}
+              <button onClick={() => addFileRef.current.click()} disabled={addingFiles}
                 className="w-full border-2 border-dashed border-white/20 rounded-xl py-3 text-white/60 text-sm hover:border-rose-400 hover:text-rose-400 transition-colors disabled:opacity-50">
                 {addingFiles ? '上傳中...' : '＋ 追加照片'}
               </button>
               <input ref={addFileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleAddFiles} />
             </>
           )}
-
-          {/* Save */}
           <button onClick={handleSave} disabled={saving}
-            className="w-full bg-rose-500 hover:bg-rose-600 text-white font-semibold py-3 rounded-xl disabled:opacity-60 text-sm transition-all">
+            className="w-full bg-rose-500 hover:bg-rose-600 text-white font-semibold py-3 rounded-xl disabled:opacity-60 text-sm">
             {saving ? '儲存中...' : '儲存變更'}
           </button>
-
-          {/* Delete */}
           {!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)}
               className="w-full border border-red-500/40 text-red-400 py-2.5 rounded-xl text-sm hover:bg-red-500/10 transition-colors">
@@ -212,6 +196,76 @@ function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// Between-style memory card
+function MemoryCard({ memory, user, onClick }) {
+  const [liked, setLiked] = useState(
+    () => JSON.parse(localStorage.getItem('liked_memories') || '[]').includes(memory.id)
+  );
+
+  const toggleLike = (e) => {
+    e.stopPropagation();
+    const likes = JSON.parse(localStorage.getItem('liked_memories') || '[]');
+    const next = liked ? likes.filter(id => id !== memory.id) : [...likes, memory.id];
+    localStorage.setItem('liked_memories', JSON.stringify(next));
+    setLiked(!liked);
+  };
+
+  const isMe = memory.user_id === user?.id;
+  const thumb = memory.files?.[0];
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden animate-fade-in" onClick={onClick}>
+      {/* Photo/video */}
+      {thumb && memory.type === 'photo' && (
+        <img src={thumb} alt="" className="w-full object-cover" style={{ maxHeight: 320, minHeight: 160 }} />
+      )}
+      {memory.type === 'video' && thumb && (
+        <div className="w-full bg-gray-100 flex flex-col items-center justify-center" style={{ height: 140 }}>
+          <span className="text-5xl">🎬</span>
+          <span className="text-xs text-gray-400 mt-1">點擊播放</span>
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="px-4 pt-3 pb-1">
+        {/* Avatar + name row */}
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden">
+            {memory.avatar
+              ? <img src={memory.avatar} alt="" className="w-full h-full object-cover" />
+              : (memory.username?.[0]?.toUpperCase() || '?')}
+          </div>
+          <span className="text-sm font-medium text-gray-700">{isMe ? '你' : memory.username}</span>
+          {memory.files?.length > 1 && (
+            <span className="ml-auto text-xs text-gray-400">{memory.files.length} 張</span>
+          )}
+        </div>
+
+        {/* Caption */}
+        {memory.content && (
+          <p className="text-gray-600 text-sm leading-snug line-clamp-3 mb-2">{memory.content}</p>
+        )}
+      </div>
+
+      {/* Action bar */}
+      <div className="flex items-center gap-1 px-3 py-2 border-t border-gray-50">
+        <button onClick={toggleLike}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all ${liked ? 'text-rose-500 bg-rose-50' : 'text-gray-400 hover:text-rose-400 hover:bg-rose-50'}`}>
+          {liked ? '❤️' : '🤍'}
+        </button>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-300">
+          <span>💬</span>
+        </div>
+        <div className="ml-auto">
+          <span className="text-xs bg-rose-50 text-rose-400 px-2 py-0.5 rounded-full font-medium">
+            {TYPE_ICONS[memory.type]} {TYPE_LABELS[memory.type]}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -274,18 +328,22 @@ export default function Memories() {
     );
   }
 
+  const grouped = groupByDate(memories);
+
   return (
-    <div className="px-4 py-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="pb-4">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-3 sticky top-0 bg-rose-50 z-10">
         <h2 className="text-base font-bold text-rose-700">我們的回憶</h2>
         <button onClick={() => setShowForm(!showForm)}
-          className="bg-rose-500 text-white text-sm font-semibold px-4 py-1.5 rounded-full">
+          className="bg-rose-500 text-white text-sm font-semibold px-4 py-1.5 rounded-full shadow-sm">
           {showForm ? '✕ 取消' : '+ 新增'}
         </button>
       </div>
 
+      {/* New memory form */}
       {showForm && (
-        <div className="bg-white rounded-2xl shadow-sm p-4 mb-4 animate-fade-in">
+        <div className="mx-4 bg-white rounded-2xl shadow-sm p-4 mb-4 animate-fade-in">
           <form onSubmit={handleSubmit} className="space-y-3">
             {error && <div className="bg-red-50 text-red-600 rounded-xl px-3 py-2 text-sm">{error}</div>}
             <div className="flex gap-2">
@@ -328,6 +386,7 @@ export default function Memories() {
         </div>
       )}
 
+      {/* Content */}
       {loading ? (
         <div className="text-center py-12 text-gray-400">載入中...</div>
       ) : memories.length === 0 ? (
@@ -336,43 +395,25 @@ export default function Memories() {
           <p className="text-gray-400 text-sm">還沒有回憶，快去新增第一個吧！</p>
         </div>
       ) : (
-        <div className="space-y-3 pb-4">
-          {memories.map(m => {
-            const isMe = m.user_id === user?.id;
-            const dateStr = new Date(m.date || m.created_at).toLocaleDateString('zh-TW', {
-              year: 'numeric', month: 'long', day: 'numeric',
-            });
-            const thumb = m.files?.[0];
-            return (
-              <div key={m.id}
-                className="bg-white rounded-2xl shadow-sm overflow-hidden cursor-pointer active:scale-[0.98] transition-transform animate-fade-in"
-                onClick={() => setSelected(m)}>
-                {thumb && m.type === 'photo' && (
-                  <img src={thumb} alt="" className="w-full object-cover" style={{ maxHeight: 180 }} />
-                )}
-                {m.type === 'video' && thumb && (
-                  <div className="w-full bg-gray-100 flex items-center justify-center" style={{ height: 100 }}>
-                    <span className="text-4xl">🎬</span>
-                  </div>
-                )}
-                <div className="px-4 py-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-semibold text-rose-400 bg-rose-50 px-2 py-0.5 rounded-full">
-                      {TYPE_ICONS[m.type]} {TYPE_LABELS[m.type]}
-                    </span>
-                    {m.files?.length > 1 && (
-                      <span className="text-xs text-gray-400">{m.files.length} 張</span>
-                    )}
-                    <span className="text-xs text-gray-400 ml-auto">{dateStr}</span>
-                  </div>
-                  {m.content && (
-                    <p className="text-gray-600 text-sm leading-snug line-clamp-2">{m.content}</p>
-                  )}
-                  <p className="text-xs text-gray-300 mt-1">{isMe ? '你' : m.username}</p>
-                </div>
+        <div className="space-y-6 px-4">
+          {grouped.map(([date, items]) => (
+            <div key={date}>
+              {/* Date section header */}
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex-1 h-px bg-gray-200" />
+                <span className="text-xs text-gray-400 font-medium whitespace-nowrap">
+                  {formatDateHeader(date)}
+                </span>
+                <div className="flex-1 h-px bg-gray-200" />
               </div>
-            );
-          })}
+              {/* Cards for this date */}
+              <div className="space-y-3">
+                {items.map(m => (
+                  <MemoryCard key={m.id} memory={m} user={user} onClick={() => setSelected(m)} />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

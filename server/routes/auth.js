@@ -3,8 +3,22 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
+const path = require('path');
+const multer = require('multer');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
+  filename: (req, file, cb) => cb(null, 'avatar-' + uuidv4() + path.extname(file.originalname)),
+});
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) =>
+    /jpg|jpeg|png|gif|webp/i.test(path.extname(file.originalname).slice(1))
+      ? cb(null, true) : cb(new Error('Image only'), false),
+});
 
 const JWT_SECRET = process.env.JWT_SECRET || 'couples-secret-key-2024';
 const RESET_SECRET = (process.env.JWT_SECRET || 'couples-secret-key-2024') + '-reset';
@@ -87,6 +101,30 @@ router.get('/me', authMiddleware, (req, res) => {
     return res.json({ user });
   } catch (err) {
     console.error('Me error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/auth/avatar — upload profile photo
+router.post('/avatar', authMiddleware, avatarUpload.single('avatar'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const avatarPath = `/uploads/${req.file.filename}`;
+    db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(avatarPath, req.user.id);
+    const user = db.prepare('SELECT id, username, email, avatar FROM users WHERE id = ?').get(req.user.id);
+    return res.json({ user });
+  } catch (err) {
+    console.error('Avatar upload error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/auth/avatar — remove profile photo
+router.delete('/avatar', authMiddleware, (req, res) => {
+  try {
+    db.prepare('UPDATE users SET avatar = NULL WHERE id = ?').run(req.user.id);
+    return res.json({ ok: true });
+  } catch (err) {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
