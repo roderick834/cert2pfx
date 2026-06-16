@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePushContext } from '../App';
@@ -11,6 +11,21 @@ export default function Profile() {
   const [pushLoading, setPushLoading] = useState(false);
   const [pushMsg, setPushMsg] = useState('');
 
+  // ntfy state
+  const [ntfyTopic, setNtfyTopic] = useState('');
+  const [ntfyInput, setNtfyInput] = useState('');
+  const [ntfyEditing, setNtfyEditing] = useState(false);
+  const [ntfySaving, setNtfySaving] = useState(false);
+  const [ntfyMsg, setNtfyMsg] = useState('');
+
+  useEffect(() => {
+    if (!user) return;
+    api.get('/push/ntfy').then(r => {
+      setNtfyTopic(r.data.topic || '');
+      setNtfyInput(r.data.topic || '');
+    }).catch(() => {});
+  }, [user]);
+
   const handleEnablePush = async () => {
     setPushLoading(true);
     const result = await requestPermission();
@@ -20,6 +35,20 @@ export default function Profile() {
     else setPushMsg('開啟失敗，請稍後再試');
     setTimeout(() => setPushMsg(''), 4000);
   };
+
+  const saveNtfy = async () => {
+    if (!ntfyInput.trim()) return;
+    setNtfySaving(true);
+    try {
+      await api.post('/push/ntfy', { topic: ntfyInput.trim() });
+      setNtfyTopic(ntfyInput.trim());
+      setNtfyEditing(false);
+      setNtfyMsg('✅ 已儲存！記得在 ntfy App 訂閱此頻道');
+      setTimeout(() => setNtfyMsg(''), 4000);
+    } catch { setNtfyMsg('儲存失敗'); }
+    finally { setNtfySaving(false); }
+  };
+
   const [mode, setMode] = useState(null);
   const [coupleDate, setCoupleDate] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -212,28 +241,72 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Push notifications */}
-      <div className="bg-white rounded-2xl shadow-sm p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-semibold text-gray-700 text-sm">推播通知</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {!pushSupported ? '此裝置不支援' :
-                pushStatus === 'granted' ? '✅ 已開啟' :
-                pushStatus === 'denied' ? '❌ 已拒絕（請到系統設定開啟）' :
-                '收到訊息和來電時通知你'}
-            </p>
-          </div>
-          {pushSupported && pushStatus !== 'granted' && pushStatus !== 'denied' && (
-            <button
-              onClick={handleEnablePush}
-              disabled={pushLoading}
-              className="bg-rose-500 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-60">
-              {pushLoading ? '開啟中...' : '開啟通知'}
-            </button>
-          )}
+      {/* Notifications */}
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 pt-5 pb-3 border-b border-gray-100">
+          <p className="font-semibold text-gray-700 text-sm mb-1">通知設定</p>
+          <p className="text-xs text-gray-400">選擇一種方式接收訊息和來電通知</p>
         </div>
-        {pushMsg && <p className="text-sm mt-3 text-gray-500">{pushMsg}</p>}
+
+        {/* Web Push (Chrome/newer Safari) */}
+        <div className="px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-700">瀏覽器推播</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {!pushSupported ? 'iOS 需 16.4+ 才支援' :
+                  pushStatus === 'granted' ? '✅ 已開啟' :
+                  pushStatus === 'denied' ? '已拒絕（請到系統設定開啟）' :
+                  'Chrome / 新版 Safari'}
+              </p>
+            </div>
+            {pushSupported && pushStatus !== 'granted' && pushStatus !== 'denied' && (
+              <button onClick={handleEnablePush} disabled={pushLoading}
+                className="bg-rose-500 text-white text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-60">
+                {pushLoading ? '開啟中...' : '開啟'}
+              </button>
+            )}
+          </div>
+          {pushMsg && <p className="text-xs mt-2 text-gray-500">{pushMsg}</p>}
+        </div>
+
+        {/* ntfy.sh */}
+        <div className="px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-700">ntfy App 通知</p>
+              <p className="text-xs text-gray-400 mt-0.5">支援所有 iOS / Android，需安裝 ntfy App</p>
+              {ntfyTopic && !ntfyEditing && (
+                <p className="text-xs text-rose-500 mt-1 font-mono break-all">頻道：{ntfyTopic}</p>
+              )}
+            </div>
+            <button onClick={() => setNtfyEditing(e => !e)}
+              className="text-xs text-rose-400 font-medium flex-shrink-0 mt-0.5">
+              {ntfyEditing ? '取消' : ntfyTopic ? '修改' : '設定'}
+            </button>
+          </div>
+
+          {ntfyEditing && (
+            <div className="mt-3 space-y-2">
+              <input
+                value={ntfyInput}
+                onChange={e => setNtfyInput(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
+                placeholder="輸入頻道名稱（英數字）"
+                className="w-full border border-rose-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+              />
+              <div className="bg-rose-50 rounded-xl p-3 text-xs text-gray-500 space-y-1">
+                <p>1. 安裝 <strong>ntfy</strong> App（App Store / Google Play）</p>
+                <p>2. 點 ＋ 訂閱你輸入的頻道名稱</p>
+                <p>3. 儲存後就能收到通知</p>
+              </div>
+              <button onClick={saveNtfy} disabled={ntfySaving || !ntfyInput.trim()}
+                className="w-full bg-rose-500 text-white text-sm font-semibold py-2.5 rounded-xl disabled:opacity-50">
+                {ntfySaving ? '儲存中...' : '儲存'}
+              </button>
+            </div>
+          )}
+          {ntfyMsg && <p className="text-xs mt-2 text-gray-500">{ntfyMsg}</p>}
+        </div>
       </div>
 
       <button onClick={() => { logout(); navigate('/login'); }}

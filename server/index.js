@@ -111,6 +111,21 @@ function getCoupleId(userId) {
   return couple ? couple.id : null;
 }
 
+// Helper: send ntfy.sh notification
+async function sendNtfy(userId, title, body, tags = '') {
+  const row = db.prepare('SELECT ntfy_topic FROM users WHERE id = ?').get(userId);
+  if (!row?.ntfy_topic) return;
+  fetch(`https://ntfy.sh/${encodeURIComponent(row.ntfy_topic)}`, {
+    method: 'POST',
+    headers: {
+      'Title': title,
+      'Tags': tags,
+      'Content-Type': 'text/plain; charset=utf-8',
+    },
+    body,
+  }).catch(() => {});
+}
+
 // Helper: send web push to a user (skips if they have an active socket connection)
 function isUserOnline(userId) {
   return [...io.sockets.sockets.values()].some(s => s.user?.id === userId);
@@ -168,16 +183,13 @@ io.on('connection', (socket) => {
       io.to(coupleId).emit('new-message', message);
 
       // Push notification to partner if they're offline
-      const coupleRow = db.prepare('SELECT * FROM couples WHERE id = ?').get(coupleId);
-      if (coupleRow) {
-        const partnerId = coupleRow.user1_id === userId ? coupleRow.user2_id : coupleRow.user1_id;
-        if (partnerId) {
-          sendPush(partnerId, {
-            title: `💬 ${socket.user.username}`,
-            body: content ? (content.length > 60 ? content.slice(0, 60) + '…' : content) : '傳送了一張貼圖',
-            tag: 'message',
-            url: '/chat',
-          });
+      const coupleRow2 = db.prepare('SELECT * FROM couples WHERE id = ?').get(coupleId);
+      if (coupleRow2) {
+        const partnerId2 = coupleRow2.user1_id === userId ? coupleRow2.user2_id : coupleRow2.user1_id;
+        if (partnerId2) {
+          const preview = content ? (content.length > 60 ? content.slice(0, 60) + '…' : content) : '傳送了一張貼圖';
+          sendPush(partnerId2, { title: `💬 ${socket.user.username}`, body: preview, tag: 'message', url: '/chat' });
+          sendNtfy(partnerId2, `💬 ${socket.user.username}`, preview, 'speech_balloon');
         }
       }
     } catch (err) {
@@ -202,12 +214,9 @@ io.on('connection', (socket) => {
       const partner = db.prepare('SELECT email FROM users WHERE id = ?').get(partnerId);
       if (partner?.email) sendCallEmail(partner.email, socket.user.username, data.callType);
       // Push notification for incoming call
-      sendPush(partnerId, {
-        title: `📞 ${socket.user.username} 正在呼叫你`,
-        body: data.callType === 'video' ? '點擊接聽視訊通話' : '點擊接聽語音通話',
-        tag: 'call',
-        url: '/call',
-      });
+      const callBody = data.callType === 'video' ? '點擊接聽視訊通話' : '點擊接聽語音通話';
+      sendPush(partnerId, { title: `📞 ${socket.user.username} 正在呼叫你`, body: callBody, tag: 'call', url: '/call' });
+      sendNtfy(partnerId, `📞 ${socket.user.username} 正在呼叫你`, callBody, 'telephone_receiver');
     }
   });
 

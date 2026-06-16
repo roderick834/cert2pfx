@@ -43,4 +43,18 @@ router.delete('/subscribe', auth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Save ntfy topic for this user
+router.post('/ntfy', auth, (req, res) => {
+  const { topic } = req.body;
+  if (!topic || topic.trim().length < 3) return res.status(400).json({ error: '頻道名稱太短' });
+  db.prepare('UPDATE users SET ntfy_topic = ? WHERE id = ?').run(topic.trim(), req.user.id);
+  res.json({ ok: true });
+});
+
+// Get current ntfy topic
+router.get('/ntfy', auth, (req, res) => {
+  const row = db.prepare('SELECT ntfy_topic FROM users WHERE id = ?').get(req.user.id);
+  res.json({ topic: row?.ntfy_topic || '' });
+});
+
 module.exports = router;
