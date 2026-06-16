@@ -63,6 +63,7 @@ function PhotoViewer({ files }) {
 }
 
 function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
+  const [closing, setClosing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(memory.content || '');
   const [editDate, setEditDate] = useState((memory.date || memory.created_at || '').split('T')[0]);
@@ -72,6 +73,8 @@ function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const addFileRef = useRef();
+
+  const dismiss = () => { setClosing(true); setTimeout(onClose, 200); };
 
   const isPhoto = memory.type === 'photo';
   const isVideo = memory.type === 'video';
@@ -113,14 +116,14 @@ function MemoryDetail({ memory, onClose, onUpdate, onDelete }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col">
+    <div className={`fixed inset-0 z-50 bg-black flex flex-col ${closing ? 'viewer-exit' : 'viewer-enter'}`}>
       <div className="flex-shrink-0 bg-black/80 backdrop-blur-sm px-4 py-3 flex items-center gap-2">
         <span className="text-white/70 text-sm flex-1 truncate">{TYPE_ICONS[memory.type]} {formatDateHeader(editDate)}</span>
         <button onClick={() => { setEditing(e => !e); setConfirmDelete(false); }}
           className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white">
           {editing ? '✕' : '✏️'}
         </button>
-        <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-white text-xl">✕</button>
+        <button onClick={dismiss} className="w-8 h-8 flex items-center justify-center text-white text-xl">✕</button>
       </div>
 
       {hasMedia && !editing && (
@@ -265,9 +268,11 @@ function MemoryCard({ memory, user, onClick }) {
 
 function AlbumFullViewer({ files, startIdx, onClose }) {
   const [idx, setIdx] = useState(startIdx || 0);
+  const [closing, setClosing] = useState(false);
   const touchX = useRef(null);
   const prev = () => setIdx(i => Math.max(0, i - 1));
   const next = () => setIdx(i => Math.min(files.length - 1, i + 1));
+  const dismiss = () => { setClosing(true); setTimeout(onClose, 180); };
   const onTouchStart = (e) => { touchX.current = e.touches[0].clientX; };
   const onTouchEnd = (e) => {
     if (touchX.current === null) return;
@@ -276,11 +281,11 @@ function AlbumFullViewer({ files, startIdx, onClose }) {
     touchX.current = null;
   };
   return (
-    <div className="fixed inset-0 z-[60] bg-black flex flex-col"
+    <div className={`fixed inset-0 z-[60] bg-black flex flex-col ${closing ? 'viewer-exit' : 'viewer-enter'}`}
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-black/70 backdrop-blur-sm">
         <span className="text-white/60 text-sm">{idx + 1} / {files.length}</span>
-        <button onClick={onClose} className="text-white text-2xl w-9 h-9 flex items-center justify-center">✕</button>
+        <button onClick={dismiss} className="text-white text-2xl w-9 h-9 flex items-center justify-center">✕</button>
       </div>
       <div className="flex-1 relative">
         <img src={files[idx]} alt="" className="absolute inset-0 w-full h-full object-contain" />
@@ -314,7 +319,9 @@ function AlbumDetail({ album, onClose, onAlbumUpdate, onAlbumDelete }) {
   const [addingFiles, setAddingFiles] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [closing, setClosing] = useState(false);
   const addFileRef = useRef();
+  const dismiss = () => { setClosing(true); setTimeout(onClose, 220); };
 
   const handleRename = async () => {
     if (!newName.trim()) return;
@@ -347,16 +354,16 @@ function AlbumDetail({ album, onClose, onAlbumUpdate, onAlbumDelete }) {
     try {
       await api.delete(`/albums/${album.id}`);
       onAlbumDelete(album.id);
-      onClose();
+      dismiss();
     } catch {}
     setDeleting(false);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-rose-50 flex flex-col">
+    <div className={`fixed inset-0 z-50 bg-rose-50 flex flex-col ${closing ? 'overlay-exit' : 'overlay-enter'}`}>
       {/* Header */}
       <div className="flex-shrink-0 bg-white border-b border-rose-100 px-4 py-3 flex items-center gap-3">
-        <button onClick={onClose} className="text-rose-500 text-2xl w-8 h-8 flex items-center justify-center">‹</button>
+        <button onClick={dismiss} className="text-rose-500 text-2xl w-8 h-8 flex items-center justify-center">‹</button>
         {editingName ? (
           <input
             value={newName}

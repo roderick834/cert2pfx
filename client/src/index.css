@@ -37,6 +37,28 @@ select {
   from { opacity: 0; transform: translateY(12px) scale(0.99); }
   to   { opacity: 1; transform: translateY(0)   scale(1);    }
 }
+
+/* Overlay / modal transitions — iOS-style slide-up sheet */
+.overlay-enter {
+  animation: overlayEnter 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+.overlay-exit {
+  animation: overlayExit 0.22s cubic-bezier(0.55, 0, 1, 0.45) both;
+}
+@keyframes overlayEnter {
+  from { opacity: 0; transform: translateY(48px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+@keyframes overlayExit {
+  from { opacity: 1; transform: translateY(0)    scale(1);    }
+  to   { opacity: 0; transform: translateY(48px) scale(0.97); }
+}
+
+/* Full-screen viewer (photo/video) — pure fade */
+.viewer-enter { animation: viewerEnter 0.25s ease-out both; }
+.viewer-exit  { animation: viewerExit  0.18s ease-in  both; }
+@keyframes viewerEnter { from { opacity:0; transform:scale(1.03); } to { opacity:1; transform:scale(1); } }
+@keyframes viewerExit  { from { opacity:1; transform:scale(1);    } to { opacity:0; transform:scale(1.03); } }
 @keyframes sparkle { 0%,100% { opacity:0; transform:scale(0.3) rotate(-15deg); } 50% { opacity:0.9; transform:scale(1) rotate(15deg); } }
 .sparkle-star { animation:sparkle 2s ease-in-out infinite; pointer-events:none; position:absolute; color:rgba(255,255,255,0.9); text-shadow:0 0 6px rgba(255,255,255,0.8); }
 
