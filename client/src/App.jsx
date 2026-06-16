@@ -1,4 +1,4 @@
-import React from 'react';
+import { createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
@@ -16,7 +16,6 @@ import StickerMaker from './pages/StickerMaker';
 import Profile from './pages/Profile';
 import Dates from './pages/Dates';
 import { usePush } from './hooks/usePush';
-import React, { createContext, useContext } from 'react';
 
 const PushContext = createContext({ status: 'idle', requestPermission: async () => {}, supported: false });
 
