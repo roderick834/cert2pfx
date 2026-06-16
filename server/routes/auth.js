@@ -7,6 +7,7 @@ const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'couples-secret-key-2024';
+const RESET_SECRET = (process.env.JWT_SECRET || 'couples-secret-key-2024') + '-reset';
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -86,6 +87,116 @@ router.get('/me', authMiddleware, (req, res) => {
     return res.json({ user });
   } catch (err) {
     console.error('Me error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/auth/device-token — register or refresh a device token (requires login)
+router.post('/device-token', authMiddleware, (req, res) => {
+  try {
+    const { token, deviceName } = req.body;
+    if (!token || token.length < 16) return res.status(400).json({ error: 'Invalid token' });
+
+    const existing = db.prepare('SELECT id FROM device_tokens WHERE token = ?').get(token);
+    if (existing) {
+      db.prepare('UPDATE device_tokens SET last_seen = datetime(\'now\'), device_name = ? WHERE token = ?')
+        .run(deviceName || null, token);
+    } else {
+      db.prepare(
+        'INSERT INTO device_tokens (id, user_id, token, device_name) VALUES (?, ?, ?, ?)'
+      ).run(uuidv4(), req.user.id, token, deviceName || null);
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Device token error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/auth/device-tokens — list bound devices, marks the calling device as current
+router.get('/device-tokens', authMiddleware, (req, res) => {
+  try {
+    const currentToken = req.query.dt || '';
+    const rows = db.prepare(
+      'SELECT id, device_name, last_seen, created_at, token FROM device_tokens WHERE user_id = ? ORDER BY last_seen DESC'
+    ).all(req.user.id);
+    const tokens = rows.map(r => ({
+      id: r.id,
+      device_name: r.device_name,
+      last_seen: r.last_seen,
+      created_at: r.created_at,
+      is_current: currentToken ? r.token === currentToken : false,
+    }));
+    return res.json({ tokens });
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/auth/device-tokens/:id — remove a bound device
+router.delete('/device-tokens/:id', authMiddleware, (req, res) => {
+  try {
+    db.prepare('DELETE FROM device_tokens WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/auth/forgot-password — verify email + device token → short-lived reset JWT
+router.post('/forgot-password', (req, res) => {
+  try {
+    const { email, deviceToken } = req.body;
+    if (!email || !deviceToken) {
+      return res.status(400).json({ error: '缺少必要欄位' });
+    }
+
+    const user = db.prepare('SELECT id, username FROM users WHERE email = ?').get(email);
+    if (!user) {
+      // Don't reveal whether email exists — generic error
+      return res.status(400).json({ error: '找不到此帳號，或此裝置未綁定' });
+    }
+
+    const row = db.prepare('SELECT id FROM device_tokens WHERE user_id = ? AND token = ?').get(user.id, deviceToken);
+    if (!row) {
+      return res.status(400).json({ error: '找不到此帳號，或此裝置未綁定' });
+    }
+
+    // Update last_seen
+    db.prepare('UPDATE device_tokens SET last_seen = datetime(\'now\') WHERE id = ?').run(row.id);
+
+    // Issue short-lived reset token (15 min)
+    const resetToken = jwt.sign({ userId: user.id, reset: true }, RESET_SECRET, { expiresIn: '15m' });
+    return res.json({ resetToken, username: user.username });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/auth/reset-password — consume reset JWT, set new password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { resetToken, newPassword } = req.body;
+    if (!resetToken || !newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: '新密碼至少需要 6 個字元' });
+    }
+
+    let payload;
+    try {
+      payload = jwt.verify(resetToken, RESET_SECRET);
+    } catch {
+      return res.status(400).json({ error: '重設連結已失效，請重新申請' });
+    }
+
+    if (!payload.reset) return res.status(400).json({ error: '無效的重設憑證' });
+
+    const password_hash = await bcrypt.hash(newPassword, 12);
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(password_hash, payload.userId);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Reset password error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

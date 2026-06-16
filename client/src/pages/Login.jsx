@@ -71,7 +71,13 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-400 mt-6">
+        <p className="text-center text-sm text-gray-400 mt-4">
+          <Link to="/forgot-password" className="text-rose-400 hover:underline">
+            忘記密碼？
+          </Link>
+        </p>
+
+        <p className="text-center text-sm text-gray-400 mt-3">
           還沒有帳號？{' '}
           <Link to="/register" className="text-rose-500 font-medium hover:underline">
             立即註冊

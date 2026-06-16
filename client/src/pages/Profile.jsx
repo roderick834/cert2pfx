@@ -19,6 +19,28 @@ export default function Profile() {
   const [ntfySaving, setNtfySaving] = useState(false);
   const [ntfyMsg, setNtfyMsg] = useState('');
 
+  // Device tokens state
+  const [devices, setDevices] = useState([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [showDevices, setShowDevices] = useState(false);
+
+  const loadDevices = async () => {
+    setDevicesLoading(true);
+    try {
+      const dt = localStorage.getItem('together_device_token') || '';
+      const res = await api.get(`/auth/device-tokens?dt=${encodeURIComponent(dt)}`);
+      setDevices(res.data.tokens || []);
+    } catch {}
+    setDevicesLoading(false);
+  };
+
+  const removeDevice = async (id) => {
+    try {
+      await api.delete(`/auth/device-tokens/${id}`);
+      setDevices(d => d.filter(x => x.id !== id));
+    } catch {}
+  };
+
   useEffect(() => {
     if (!user) return;
     api.get('/push/ntfy').then(r => {
@@ -323,6 +345,60 @@ export default function Profile() {
           )}
           {ntfyMsg && <p className="text-xs mt-2 text-gray-500">{ntfyMsg}</p>}
         </div>
+      </div>
+
+      {/* Bound Devices */}
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <button
+          onClick={() => { setShowDevices(v => !v); if (!showDevices) loadDevices(); }}
+          className="w-full flex items-center gap-3 px-5 py-4 text-left"
+        >
+          <span className="text-xl">📱</span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-gray-700">綁定裝置</p>
+            <p className="text-xs text-gray-400">用於忘記密碼驗證</p>
+          </div>
+          <span className="text-gray-300 text-lg">{showDevices ? '∨' : '›'}</span>
+        </button>
+
+        {showDevices && (
+          <div className="border-t border-gray-50 px-5 pb-4">
+            {devicesLoading ? (
+              <p className="text-xs text-gray-400 py-3 text-center">載入中...</p>
+            ) : devices.length === 0 ? (
+              <p className="text-xs text-gray-400 py-3 text-center">尚無綁定裝置</p>
+            ) : (
+              <div className="space-y-2 pt-3">
+                {devices.map(d => {
+                  const isCurrent = d.is_current;
+                  return (
+                    <div key={d.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5">
+                      <span className="text-lg">{d.device_name === 'iPhone' || d.device_name === 'iPad' ? '🍎' : d.device_name === 'Android' ? '🤖' : '💻'}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-700">
+                          {d.device_name || '未知裝置'}
+                          {isCurrent && <span className="ml-1.5 text-xs text-rose-500 font-normal">（此裝置）</span>}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          最後登入 {new Date(d.last_seen).toLocaleDateString('zh-TW')}
+                        </p>
+                      </div>
+                      {!isCurrent && (
+                        <button onClick={() => removeDevice(d.id)}
+                          className="text-xs text-red-400 hover:text-red-600 font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">
+                          移除
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <p className="text-xs text-gray-400 mt-3 text-center">
+              登入的裝置會自動綁定，可用來重設密碼
+            </p>
+          </div>
+        )}
       </div>
 
       <button onClick={() => { logout(); navigate('/login'); }}
