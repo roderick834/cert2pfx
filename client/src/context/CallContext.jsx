@@ -13,6 +13,43 @@ const ICE_SERVERS = {
   ],
 };
 
+// Pre-render 啵啵啵 ringtone as a looping WAV blob so <audio> can play it
+// in the background (AudioContext gets suspended when app is backgrounded).
+async function buildRingtoneUrl() {
+  const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!Ctx) return null;
+  const sr = 22050;
+  const dur = 1.8; // one 啵啵啵 cycle (3 pops + silence)
+  const ctx = new Ctx(1, Math.ceil(sr * dur), sr);
+  const pop = (t) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(1400, t);
+    o.frequency.exponentialRampToValueAtTime(200, t + 0.1);
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.linearRampToValueAtTime(0.5, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.start(t); o.stop(t + 0.12);
+  };
+  pop(0.0); pop(0.22); pop(0.44);
+  const buf = await ctx.startRendering();
+  const pcm = buf.getChannelData(0);
+  const dataLen = pcm.length * 2;
+  const ab = new ArrayBuffer(44 + dataLen);
+  const dv = new DataView(ab);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); dv.setUint32(4, 36 + dataLen, true);
+  w(8, 'WAVE'); w(12, 'fmt ');
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true);
+  dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  w(36, 'data'); dv.setUint32(40, dataLen, true);
+  for (let i = 0; i < pcm.length; i++)
+    dv.setInt16(44 + i * 2, Math.max(-32767, Math.min(32767, pcm[i] * 32767)) | 0, true);
+  return URL.createObjectURL(new Blob([ab], { type: 'audio/wav' }));
+}
+
 const CallContext = createContext(null);
 
 export function CallProvider({ children }) {
@@ -30,67 +67,61 @@ export function CallProvider({ children }) {
   const remoteStreamRef = useRef(null);
   const pendingCandidates = useRef([]);
   const audioCtxRef = useRef(null);
-  // Persistent <audio> element lives in document.body, not inside any React component.
-  // This means audio keeps playing when the user navigates away from the Call page.
+
+  // On iOS, <video> element routes to earpiece (playAndRecord AVAudioSession),
+  // while <audio> routes to speaker. We use a tiny hidden video for call audio.
   const remoteAudioRef = useRef(null);
+  // Separate looping <audio> element for ringtone (can play in background unlike AudioContext)
+  const ringtoneAudioRef = useRef(null);
+
   const localVideoEl = useRef(null);
   const remoteVideoEl = useRef(null);
-  const ringtoneRef = useRef(null);
+
+  // Hidden <video> element for remote call audio — earpiece routing on iOS
+  useEffect(() => {
+    const el = document.createElement('video');
+    el.autoplay = true;
+    el.playsInline = true;
+    el.style.cssText = 'position:fixed;width:1px;height:1px;top:-2px;left:-2px;opacity:0;pointer-events:none;';
+    document.body.appendChild(el);
+    remoteAudioRef.current = el;
+    return () => { el.remove(); remoteAudioRef.current = null; };
+  }, []);
+
+  // Ringtone <audio> element — pre-render WAV and unlock on first user gesture
+  useEffect(() => {
+    const el = document.createElement('audio');
+    el.loop = true;
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    ringtoneAudioRef.current = el;
+
+    buildRingtoneUrl().then(url => {
+      if (url && ringtoneAudioRef.current) ringtoneAudioRef.current.src = url;
+    }).catch(() => {});
+
+    // Unlock on first touch/click so it can play without a gesture later
+    const unlock = () => {
+      const r = ringtoneAudioRef.current;
+      if (r) r.play().then(() => r.pause()).catch(() => {});
+    };
+    document.addEventListener('touchstart', unlock, { once: true, capture: true });
+    document.addEventListener('click', unlock, { once: true, capture: true });
+
+    return () => { el.remove(); ringtoneAudioRef.current = null; };
+  }, []);
 
   const stopRingtone = () => {
-    ringtoneRef.current?.stop();
-    ringtoneRef.current = null;
+    const r = ringtoneAudioRef.current;
+    if (r && !r.paused) { r.pause(); r.currentTime = 0; }
   };
 
   const startRingtone = () => {
-    stopRingtone();
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    let ctx;
-    try { ctx = new Ctx(); } catch { return; }
-    let nextTime = ctx.currentTime + 0.05;
-    let stopped = false;
-    let timerId;
-    // 啵啵啵 — three quick bubble pops: freq slides 1400→200 Hz in 100ms
-    function pop(t) {
-      const osc = ctx.createOscillator();
-      const env = ctx.createGain();
-      osc.connect(env); env.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(1400, t);
-      osc.frequency.exponentialRampToValueAtTime(200, t + 0.1);
-      env.gain.setValueAtTime(0.001, t);
-      env.gain.linearRampToValueAtTime(0.5, t + 0.006);
-      env.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-      osc.start(t); osc.stop(t + 0.12);
-    }
-    function burst(t) {
-      pop(t + 0.00);
-      pop(t + 0.22);
-      pop(t + 0.44);
-    }
-    function tick() {
-      if (stopped) return;
-      while (nextTime < ctx.currentTime + 0.5) { burst(nextTime); nextTime += 1.8; }
-      timerId = setTimeout(tick, 200);
-    }
-    ctx.resume().then(tick).catch(() => {});
-    ringtoneRef.current = {
-      stop() { stopped = true; clearTimeout(timerId); try { ctx.close(); } catch {} },
-    };
+    const r = ringtoneAudioRef.current;
+    if (!r || !r.src) return;
+    r.currentTime = 0;
+    r.play().catch(() => {});
   };
-
-  useEffect(() => {
-    const el = document.createElement('audio');
-    el.autoplay = true;
-    el.style.display = 'none';
-    document.body.appendChild(el);
-    remoteAudioRef.current = el;
-    return () => {
-      el.remove();
-      remoteAudioRef.current = null;
-    };
-  }, []);
 
   const attachStreams = useCallback(() => {
     if (localVideoEl.current && localStreamRef.current) {
@@ -111,7 +142,7 @@ export function CallProvider({ children }) {
   const remoteVideoRef = useCallback((el) => {
     remoteVideoEl.current = el;
     if (el && remoteStreamRef.current) {
-      el.muted = true; // audio handled by remoteAudioRef
+      el.muted = true; // audio handled by remoteAudioRef video element
       el.srcObject = remoteStreamRef.current;
       el.play().catch(() => {});
     }
@@ -159,7 +190,7 @@ export function CallProvider({ children }) {
 
     const onAnswered = async ({ answer }) => {
       if (!pcRef.current) return;
-      stopRingtone(); // caller side: stop ringing now that partner answered
+      stopRingtone(); // caller side: stop ringing as soon as partner picks up
       try {
         await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer));
         await drainCandidates();
@@ -194,12 +225,12 @@ export function CallProvider({ children }) {
     pc.ontrack = (e) => {
       const remote = e.streams[0] || new MediaStream([e.track]);
       remoteStreamRef.current = remote;
-      // Audio → persistent element in document.body (survives navigation)
+      // Audio → hidden video element (earpiece on iOS via playAndRecord session)
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = remote;
         remoteAudioRef.current.play().catch(() => {});
       }
-      // Video → React video element (muted — no double audio)
+      // Video → visible React video element (muted — audio handled above)
       if (remoteVideoEl.current) {
         remoteVideoEl.current.muted = true;
         remoteVideoEl.current.srcObject = remote;
@@ -210,7 +241,6 @@ export function CallProvider({ children }) {
       if (e.candidate && socket) socket.emit('webrtc-ice-candidate', { candidate: e.candidate });
     };
     pc.oniceconnectionstatechange = () => {
-      // Attempt ICE restart on failure before giving up
       if (pc.iceConnectionState === 'failed') pc.restartIce?.();
     };
     pc.onconnectionstatechange = () => {
@@ -231,9 +261,12 @@ export function CallProvider({ children }) {
   const startCall = async (type) => {
     if (!socket || !couple) return;
     setCallError(''); setCallType(type);
-    // Unlock audio element in user-gesture context before any await (iOS Safari requires this)
+    // Unlock both audio elements in user-gesture context before any await (iOS Safari)
     if (remoteAudioRef.current) {
       remoteAudioRef.current.play().then(() => { if (remoteAudioRef.current) remoteAudioRef.current.pause(); }).catch(() => {});
+    }
+    if (ringtoneAudioRef.current) {
+      ringtoneAudioRef.current.play().then(() => { if (ringtoneAudioRef.current) ringtoneAudioRef.current.pause(); }).catch(() => {});
     }
     setStatus('calling');
     startRingtone();
@@ -255,7 +288,7 @@ export function CallProvider({ children }) {
     if (!socket || !incomingData) return;
     setCallError('');
     stopRingtone();
-    // Unlock audio element in user-gesture context before any await (iOS Safari requires this)
+    // Unlock audio elements in user-gesture context before any await (iOS Safari)
     if (remoteAudioRef.current) {
       remoteAudioRef.current.play().then(() => { if (remoteAudioRef.current) remoteAudioRef.current.pause(); }).catch(() => {});
     }
@@ -290,7 +323,7 @@ export function CallProvider({ children }) {
     setIsSpeaker(next);
 
     if (next) {
-      // Speaker: AudioContext forces audio to loudspeaker (works on iOS Safari)
+      // Speaker: AudioContext forces audio to loudspeaker
       if (!audioCtxRef.current) {
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (Ctx) {
@@ -302,7 +335,7 @@ export function CallProvider({ children }) {
         }
       }
     } else {
-      // Earpiece: close AudioContext, let audio element output normally
+      // Earpiece: close AudioContext, let hidden video element route to earpiece
       if (audioCtxRef.current) {
         audioCtxRef.current.close();
         audioCtxRef.current = null;
