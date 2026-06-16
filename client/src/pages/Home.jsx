@@ -461,7 +461,7 @@ export default function Home() {
       {showBgPicker && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowBgPicker(false)} />
-          <div className="relative bg-white rounded-t-3xl px-6 py-8">
+          <div className="relative bg-white rounded-t-3xl px-6 pt-8 pb-28">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-5" />
             <h3 className="text-center font-semibold text-gray-700 mb-5">選擇背景</h3>
             <div className="flex justify-center gap-3 mb-5">
