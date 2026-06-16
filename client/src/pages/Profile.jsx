@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePushContext } from '../App';
+import InstallPrompt from '../components/InstallPrompt';
 import api from '../api';
 
 export default function Profile() {
@@ -241,6 +242,9 @@ export default function Profile() {
           ))}
         </div>
       )}
+
+      {/* Install App */}
+      <InstallPrompt />
 
       {/* Notifications */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
