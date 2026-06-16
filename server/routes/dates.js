@@ -20,10 +20,41 @@ function getCouple(userId) {
 router.get('/', auth, (req, res) => {
   const couple = getCouple(req.user.id);
   if (!couple) return res.json({ dates: [] });
+
   const dates = db.prepare(
     'SELECT * FROM special_dates WHERE couple_id = ? ORDER BY date ASC'
   ).all(couple.id);
-  res.json({ dates });
+
+  // Inject birthdays from users table as virtual entries
+  const partnerId = couple.user1_id === req.user.id ? couple.user2_id : couple.user1_id;
+  const me = db.prepare('SELECT username, birthday FROM users WHERE id = ?').get(req.user.id);
+  const partner = partnerId ? db.prepare('SELECT username, birthday FROM users WHERE id = ?').get(partnerId) : null;
+
+  const birthdayEntries = [];
+  if (me?.birthday) {
+    birthdayEntries.push({
+      id: `__bday_me__`,
+      title: `${me.username} 的生日`,
+      date: me.birthday,
+      repeat_yearly: 1,
+      emoji: '🎂',
+      _is_birthday: true,
+      _readonly: true,
+    });
+  }
+  if (partner?.birthday) {
+    birthdayEntries.push({
+      id: `__bday_partner__`,
+      title: `${partner.username} 的生日`,
+      date: partner.birthday,
+      repeat_yearly: 1,
+      emoji: '🎂',
+      _is_birthday: true,
+      _readonly: true,
+    });
+  }
+
+  res.json({ dates: [...dates, ...birthdayEntries] });
 });
 
 router.post('/', auth, (req, res) => {
@@ -39,6 +70,7 @@ router.post('/', auth, (req, res) => {
 });
 
 router.delete('/:id', auth, (req, res) => {
+  if (req.params.id.startsWith('__bday_')) return res.status(400).json({ error: '請到個人資料修改生日' });
   const couple = getCouple(req.user.id);
   if (!couple) return res.status(400).json({ error: 'No couple' });
   db.prepare('DELETE FROM special_dates WHERE id = ? AND couple_id = ?').run(req.params.id, couple.id);

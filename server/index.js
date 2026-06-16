@@ -7,6 +7,8 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const nodemailer = require('nodemailer');
 const webpush = require('web-push');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const db = require('./db');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'couples-secret-key-2024';
@@ -54,14 +56,55 @@ const corsOptions = {
   credentials: true
 };
 
+// ── Security middleware ─────────────────────────────────────────
+// Helmet: sets safe HTTP headers (XSS, clickjacking, MIME sniff, HSTS…)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // allow /uploads images
+  contentSecurityPolicy: false, // CSP handled by client app
+}));
+
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Reduce body size limits — 50MB was excessive; file uploads use multer
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Rate limiters
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 min
+  max: 20,                     // max 20 auth attempts per IP per 15 min
+  message: { error: '嘗試次數過多，請 15 分鐘後再試' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,  // 1 min
+  max: 120,             // 120 req/min per IP (generous for active chat use)
+  message: { error: '請求過於頻繁，請稍後再試' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Stricter limiter for password reset (prevent email enumeration)
+const resetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  message: { error: '重設密碼次數過多，請 1 小時後再試' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Static file serving for uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Routes
+// Routes — auth endpoints get stricter rate limits
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/forgot-password', resetLimiter);
+app.use('/api/auth/reset-password', resetLimiter);
+app.use('/api', apiLimiter);
+
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/couples', require('./routes/couples'));
 app.use('/api/memories', require('./routes/memories'));

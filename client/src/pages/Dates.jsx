@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
 
@@ -23,7 +24,7 @@ function daysUntil(dateStr, repeatYearly) {
   return Math.round((target - today) / 86400000);
 }
 
-function DateCard({ d, onDelete }) {
+function DateCard({ d, onDelete, onBirthdayClick }) {
   const days = daysUntil(d.date, d.repeat_yearly);
   const isToday = days === 0;
   const isTomorrow = days === 1;
@@ -32,8 +33,12 @@ function DateCard({ d, onDelete }) {
   const isSoon = days > 0 && days <= 2;
 
   return (
-    <div className={`relative bg-white rounded-2xl shadow-sm overflow-hidden transition-all active:scale-[0.98]
-      ${isToday ? 'ring-2 ring-rose-400' : isSoon ? 'ring-1 ring-rose-200' : ''}`}>
+    <div
+      className={`relative bg-white rounded-2xl shadow-sm overflow-hidden transition-all active:scale-[0.98]
+        ${isToday ? 'ring-2 ring-rose-400' : isSoon ? 'ring-1 ring-rose-200' : ''}
+        ${onBirthdayClick ? 'cursor-pointer' : ''}`}
+      onClick={onBirthdayClick || undefined}
+    >
       <div className={`absolute left-0 top-0 bottom-0 w-1
         ${isToday ? 'bg-rose-400' : isSoon ? 'bg-rose-300' : isPast ? 'bg-gray-200' : 'bg-rose-200'}`} />
       <div className="pl-4 pr-3 py-3.5 flex items-center gap-3">
@@ -66,9 +71,11 @@ function DateCard({ d, onDelete }) {
               <span className="text-gray-400 text-xs">天後</span>
             </>
           )}
-          <button onClick={() => onDelete(d.id)} className="text-gray-300 hover:text-red-400 transition-colors mt-1 text-xs">
-            ✕
-          </button>
+          {d._readonly ? (
+            <span className="text-[10px] text-gray-300 mt-1">🔒</span>
+          ) : (
+            <button onClick={() => onDelete(d.id)} className="text-gray-300 hover:text-red-400 transition-colors mt-1 text-xs">✕</button>
+          )}
         </div>
       </div>
     </div>
@@ -77,6 +84,7 @@ function DateCard({ d, onDelete }) {
 
 export default function Dates() {
   const { couple } = useAuth();
+  const navigate = useNavigate();
   const [dates, setDates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -221,7 +229,12 @@ export default function Dates() {
       ) : (
         <div className="space-y-3 pb-4">
           {allDates.map(d => (
-            <DateCard key={d.id} d={d} onDelete={d._pinned ? () => {} : handleDelete} />
+            <DateCard
+              key={d.id}
+              d={d}
+              onDelete={d._pinned || d._readonly ? () => {} : handleDelete}
+              onBirthdayClick={d._is_birthday && d.id === '__bday_me__' ? () => navigate('/profile') : null}
+            />
           ))}
         </div>
       )}

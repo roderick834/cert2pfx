@@ -28,12 +28,21 @@ router.post('/register', async (req, res) => {
   try {
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
-      return res.status(400).json({ error: 'Username, email, and password are required' });
+      return res.status(400).json({ error: '請填寫所有必填欄位' });
+    }
+    if (typeof username !== 'string' || username.length < 2 || username.length > 30) {
+      return res.status(400).json({ error: '使用者名稱需 2-30 個字元' });
+    }
+    if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) {
+      return res.status(400).json({ error: 'Email 格式不正確' });
+    }
+    if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+      return res.status(400).json({ error: '密碼需 8-128 個字元' });
     }
 
-    const existingUser = db.prepare('SELECT id FROM users WHERE email = ? OR username = ?').get(email, username);
+    const existingUser = db.prepare('SELECT id FROM users WHERE email = ? OR username = ?').get(email.toLowerCase(), username);
     if (existingUser) {
-      return res.status(409).json({ error: 'User with this email or username already exists' });
+      return res.status(409).json({ error: '此 Email 或使用者名稱已被使用' });
     }
 
     const password_hash = await bcrypt.hash(password, 12);
@@ -60,11 +69,14 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ error: '請填寫 Email 和密碼' });
+    }
+    if (email.length > 200 || password.length > 128) {
+      return res.status(400).json({ error: '輸入內容超過長度限制' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
