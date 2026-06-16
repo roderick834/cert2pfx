@@ -172,7 +172,7 @@ export default function Chat() {
 
       {/* Sticker panel */}
       {showStickers && (
-        <div className="bg-white border-t border-rose-100 px-3 pt-3 pb-2">
+        <div className="bg-white border-t border-gray-100 px-3 pt-3 pb-2">
           {stickers.length === 0 ? (
             <p className="text-center text-gray-400 text-sm py-6">
               還沒有貼圖，去「貼圖」頁面建立吧！
@@ -191,23 +191,48 @@ export default function Chat() {
       )}
 
       {/* Input bar */}
-      <div className="bg-white border-t border-rose-100 px-3 py-3 flex items-center gap-2">
-        <button onClick={() => setShowStickers(!showStickers)}
-          className={`text-xl p-2 rounded-full transition-all ${showStickers ? 'bg-rose-100 text-rose-500' : 'text-gray-400 hover:text-rose-400'}`}>
-          😊
-        </button>
-        <input
-          type="text" value={text} onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); } }}
-          placeholder="傳送訊息..."
-          className="flex-1 border border-rose-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
-        />
-        <button onClick={sendText} disabled={!text.trim()}
-          className="bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white p-2.5 rounded-full transition-all">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-            <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
-          </svg>
-        </button>
+      <div className="bg-white border-t border-gray-100 px-3 py-3">
+        <div className="flex items-center gap-2">
+          {/* Sticker button — dark circle */}
+          <button
+            onClick={() => setShowStickers(!showStickers)}
+            className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all active:scale-90 ${
+              showStickers
+                ? 'bg-rose-500 shadow-md'
+                : 'bg-gray-800 shadow'
+            }`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-white" stroke="currentColor" strokeWidth={1.8}>
+              <circle cx="12" cy="12" r="9" />
+              <path d="M8.5 13.5s1 2 3.5 2 3.5-2 3.5-2" strokeLinecap="round" />
+              <circle cx="9" cy="10" r="1" fill="currentColor" stroke="none" />
+              <circle cx="15" cy="10" r="1" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+
+          {/* Text input */}
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); } }}
+              placeholder="傳送訊息..."
+              className="w-full bg-gray-100 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-rose-300 transition-all"
+            />
+          </div>
+
+          {/* Send button — rose circle */}
+          <button
+            onClick={sendText}
+            disabled={!text.trim()}
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-rose-500 shadow disabled:opacity-40 active:scale-90 transition-all disabled:shadow-none"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white translate-x-px -translate-y-px">
+              <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );
