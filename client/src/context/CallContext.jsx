@@ -177,9 +177,10 @@ export function CallProvider({ children }) {
     }
   };
 
+  const coupleId = couple?.couple?.id;
   useEffect(() => {
-    if (!socket || !couple) return;
-    socket.emit('join-couple-room', couple.couple.id);
+    if (!socket || !coupleId) return;
+    socket.emit('join-couple-room', coupleId);
 
     const onIncoming = (data) => {
       setIncomingData(data);
@@ -217,7 +218,7 @@ export function CallProvider({ children }) {
       socket.off('webrtc-ice-candidate', onICE);
       socket.off('call-ended', cleanup);
     };
-  }, [socket, couple, cleanup]);
+  }, [socket, coupleId, cleanup]);
 
   const buildPC = (stream) => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
