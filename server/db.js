@@ -103,6 +103,14 @@ db.exec(`
     order_num INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (memory_id) REFERENCES memories(id)
   );
+
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    subscription TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 `);
 
 module.exports = db;

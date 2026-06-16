@@ -15,6 +15,7 @@ import Call from './pages/Call';
 import StickerMaker from './pages/StickerMaker';
 import Profile from './pages/Profile';
 import Dates from './pages/Dates';
+import { usePush } from './hooks/usePush';
 
 const Spinner = () => (
   <div className="min-h-screen flex items-center justify-center bg-rose-50">
@@ -32,6 +33,7 @@ function RequireAuth() {
 
 function AppRoutes() {
   const { user, couple, loading } = useAuth();
+  usePush(user);
   if (loading) return <Spinner />;
 
   return (

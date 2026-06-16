@@ -6,10 +6,16 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const nodemailer = require('nodemailer');
+const webpush = require('web-push');
 const db = require('./db');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'couples-secret-key-2024';
 const PORT = process.env.PORT || 3001;
+
+// VAPID setup for web push
+const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || 'BGYDOxblN6Y1gGbS4Nz2HZQtNpAfhZDBaSmIrKNHU-sGbHq9iUkJdZFdDBKRCvCaUWTPxt35RedsDc9hOQOyjqY';
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '5YvMvLMs-zvKrQD_VjOfNACIkX8zZI_bh-Rr1hpMf6Q';
+webpush.setVapidDetails('mailto:together@app.local', VAPID_PUBLIC, VAPID_PRIVATE);
 
 // Email transport — only active when SMTP_USER + SMTP_PASS are set
 const mailer = (process.env.SMTP_USER && process.env.SMTP_PASS)
@@ -63,6 +69,7 @@ app.use('/api/stickers', require('./routes/stickers'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/dates', require('./routes/dates'));
 app.use('/api/notes', require('./routes/notes'));
+app.use('/api/push', require('./routes/push'));
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
@@ -104,6 +111,26 @@ function getCoupleId(userId) {
   return couple ? couple.id : null;
 }
 
+// Helper: send web push to a user (skips if they have an active socket connection)
+function isUserOnline(userId) {
+  return [...io.sockets.sockets.values()].some(s => s.user?.id === userId);
+}
+
+function sendPush(userId, payload) {
+  // Don't push if user is actively connected — they get real-time updates
+  if (isUserOnline(userId)) return;
+  const subs = db.prepare('SELECT subscription FROM push_subscriptions WHERE user_id = ?').all(userId);
+  const body = JSON.stringify(payload);
+  subs.forEach(({ subscription }) => {
+    webpush.sendNotification(JSON.parse(subscription), body).catch(err => {
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND subscription = ?')
+          .run(userId, subscription);
+      }
+    });
+  });
+}
+
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.user.username} (${socket.id})`);
 
@@ -139,6 +166,20 @@ io.on('connection', (socket) => {
       `).get(id);
 
       io.to(coupleId).emit('new-message', message);
+
+      // Push notification to partner if they're offline
+      const coupleRow = db.prepare('SELECT * FROM couples WHERE id = ?').get(coupleId);
+      if (coupleRow) {
+        const partnerId = coupleRow.user1_id === userId ? coupleRow.user2_id : coupleRow.user1_id;
+        if (partnerId) {
+          sendPush(partnerId, {
+            title: `💬 ${socket.user.username}`,
+            body: content ? (content.length > 60 ? content.slice(0, 60) + '…' : content) : '傳送了一張貼圖',
+            tag: 'message',
+            url: '/chat',
+          });
+        }
+      }
     } catch (err) {
       console.error('Send message error:', err);
       socket.emit('error', { message: 'Failed to send message' });
@@ -160,6 +201,13 @@ io.on('connection', (socket) => {
     if (partnerId) {
       const partner = db.prepare('SELECT email FROM users WHERE id = ?').get(partnerId);
       if (partner?.email) sendCallEmail(partner.email, socket.user.username, data.callType);
+      // Push notification for incoming call
+      sendPush(partnerId, {
+        title: `📞 ${socket.user.username} 正在呼叫你`,
+        body: data.callType === 'video' ? '點擊接聽視訊通話' : '點擊接聽語音通話',
+        tag: 'call',
+        url: '/call',
+      });
     }
   });
 
