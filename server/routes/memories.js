@@ -60,7 +60,7 @@ router.get('/', (req, res) => {
   }
 });
 
-// POST /api/memories — accept up to 20 files
+// POST /api/memories — create new memory
 router.post('/', upload.array('files', 20), (req, res) => {
   try {
     const couple = getCoupleForUser(req.user.id);
@@ -80,14 +80,12 @@ router.post('/', upload.array('files', 20), (req, res) => {
     }
 
     const id = uuidv4();
-    // Keep file_path for backward compat (first file)
     const firstFilePath = files.length > 0 ? `/uploads/${files[0].filename}` : null;
 
     db.prepare(
       'INSERT INTO memories (id, couple_id, user_id, type, content, file_path, date) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(id, couple.id, req.user.id, type, content || null, firstFilePath, date || new Date().toISOString().split('T')[0]);
 
-    // Insert all files into memory_files
     const insertFile = db.prepare('INSERT INTO memory_files (id, memory_id, file_path, order_num) VALUES (?, ?, ?, ?)');
     files.forEach((f, i) => {
       insertFile.run(uuidv4(), id, `/uploads/${f.filename}`, i);
@@ -108,16 +106,66 @@ router.post('/', upload.array('files', 20), (req, res) => {
   }
 });
 
-// DELETE /api/memories/:id
+// PATCH /api/memories/:id — edit content/date, either couple member can edit
+router.patch('/:id', (req, res) => {
+  try {
+    const couple = getCoupleForUser(req.user.id);
+    if (!couple) return res.status(404).json({ error: 'No couple found' });
+
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND couple_id = ?').get(req.params.id, couple.id);
+    if (!memory) return res.status(404).json({ error: 'Memory not found' });
+
+    const { content, date } = req.body;
+    db.prepare('UPDATE memories SET content = ?, date = ? WHERE id = ?')
+      .run(content !== undefined ? content : memory.content, date || memory.date, req.params.id);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Update memory error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/memories/:id/files — add more files to existing memory, either partner
+router.post('/:id/files', upload.array('files', 20), (req, res) => {
+  try {
+    const couple = getCoupleForUser(req.user.id);
+    if (!couple) return res.status(404).json({ error: 'No couple found' });
+
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND couple_id = ?').get(req.params.id, couple.id);
+    if (!memory) return res.status(404).json({ error: 'Memory not found' });
+
+    const files = req.files || [];
+    if (files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
+
+    const maxRow = db.prepare('SELECT MAX(order_num) as m FROM memory_files WHERE memory_id = ?').get(req.params.id);
+    let orderStart = (maxRow?.m ?? -1) + 1;
+
+    const insertFile = db.prepare('INSERT INTO memory_files (id, memory_id, file_path, order_num) VALUES (?, ?, ?, ?)');
+    files.forEach((f, i) => {
+      insertFile.run(uuidv4(), req.params.id, `/uploads/${f.filename}`, orderStart + i);
+    });
+
+    const updatedFiles = getMemoryFiles(req.params.id, memory.file_path);
+    return res.json({ files: updatedFiles });
+  } catch (err) {
+    console.error('Add files error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/memories/:id — either couple member can delete
 router.delete('/:id', (req, res) => {
   try {
-    const memory = db.prepare('SELECT * FROM memories WHERE id = ?').get(req.params.id);
+    const couple = getCoupleForUser(req.user.id);
+    if (!couple) return res.status(404).json({ error: 'No couple found' });
+
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND couple_id = ?').get(req.params.id, couple.id);
     if (!memory) return res.status(404).json({ error: 'Memory not found' });
-    if (memory.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
 
     db.prepare('DELETE FROM memory_files WHERE memory_id = ?').run(req.params.id);
     db.prepare('DELETE FROM memories WHERE id = ?').run(req.params.id);
-    return res.json({ message: 'Deleted' });
+    return res.json({ ok: true });
   } catch (err) {
     console.error('Delete memory error:', err);
     return res.status(500).json({ error: 'Internal server error' });
