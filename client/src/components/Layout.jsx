@@ -29,12 +29,12 @@ const MemoriesIcon = ({ filled }) => filled ? (
   </svg>
 );
 
-const ChatIcon = ({ filled }) => filled ? (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+const ChatIcon = ({ filled, forCenter }) => filled ? (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={forCenter ? 'w-7 h-7 text-white' : 'w-6 h-6'}>
     <path d="M20 2H4a2 2 0 00-2 2v13a2 2 0 002 2h3l3 3 3-3h5a2 2 0 002-2V4a2 2 0 00-2-2zM8 10a1 1 0 110-2 1 1 0 010 2zm4 0a1 1 0 110-2 1 1 0 010 2zm4 0a1 1 0 110-2 1 1 0 010 2z" />
   </svg>
 ) : (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={forCenter ? 'w-7 h-7 text-white' : 'w-6 h-6'}>
     <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
     <circle cx="9" cy="10" r="0.5" fill="currentColor" />
     <circle cx="12" cy="10" r="0.5" fill="currentColor" />
@@ -137,38 +137,65 @@ export default function Layout() {
       )}
 
       {/* Page content */}
-      <main className="flex-1 max-w-lg mx-auto w-full pb-20">
+      <main className="flex-1 max-w-lg mx-auto w-full pb-28">
         <Outlet />
       </main>
 
-      {/* Bottom nav — modern pill-indicator style */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-1px_12px_rgba(0,0,0,0.07)]">
-        <div className="max-w-lg mx-auto flex justify-around items-center px-2 py-1 pb-safe">
-          {navItems.map(({ to, label, Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className="flex-1"
-            >
-              {({ isActive }) => (
-                <div className={`flex flex-col items-center gap-0.5 py-2 transition-all duration-200 ${isActive ? 'text-rose-500' : 'text-gray-400'}`}>
-                  {/* Icon with pill background when active */}
-                  <div className={`relative flex items-center justify-center rounded-2xl transition-all duration-200 ${
-                    isActive ? 'bg-rose-50 px-4 py-1' : 'px-4 py-1'
-                  }`}>
-                    <Icon filled={isActive} />
-                  </div>
-                  {/* Label */}
-                  <span className={`text-[10px] font-medium leading-none transition-all ${
-                    isActive ? 'text-rose-500' : 'text-gray-400'
-                  }`}>
-                    {label}
-                  </span>
+      {/* Bottom nav — floating pill with elevated center button */}
+      <nav className="fixed bottom-4 left-3 right-3 z-40">
+        <div className="max-w-lg mx-auto relative">
+
+          {/* Elevated center Chat button — sits above the pill bar */}
+          <NavLink to="/chat" className="absolute left-1/2 -translate-x-1/2 -top-7 z-10 flex flex-col items-center gap-1">
+            {({ isActive }) => (
+              <>
+                <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 active:scale-90 ${
+                  isActive
+                    ? 'bg-gradient-to-br from-rose-400 to-pink-500 shadow-rose-200'
+                    : 'bg-gray-800 shadow-gray-300'
+                }`}>
+                  <ChatIcon filled={isActive} forCenter={true} />
                 </div>
-              )}
-            </NavLink>
-          ))}
+                <span className={`text-[10px] font-semibold transition-colors ${isActive ? 'text-rose-500' : 'text-gray-400'}`}>
+                  聊天
+                </span>
+              </>
+            )}
+          </NavLink>
+
+          {/* Floating pill bar */}
+          <div className="bg-white/95 backdrop-blur-md rounded-[28px] shadow-[0_8px_32px_rgba(0,0,0,0.10)] border border-gray-100 flex items-center px-2 py-1">
+            {/* Left side: 首頁, 回憶 */}
+            {navItems.slice(0, 2).map(({ to, label, Icon }) => (
+              <NavLink key={to} to={to} end={to === '/'} className="flex-1">
+                {({ isActive }) => (
+                  <div className={`flex flex-col items-center gap-0.5 py-2.5 transition-all duration-200 ${isActive ? 'text-rose-500' : 'text-gray-400'}`}>
+                    <div className={`flex items-center justify-center rounded-2xl transition-all duration-200 w-10 h-8 ${isActive ? 'bg-rose-50' : ''}`}>
+                      <Icon filled={isActive} />
+                    </div>
+                    <span className="text-[10px] font-medium leading-none">{label}</span>
+                  </div>
+                )}
+              </NavLink>
+            ))}
+
+            {/* Center gap placeholder (for elevated button) */}
+            <div className="flex-1" />
+
+            {/* Right side: 紀念日, 我們 */}
+            {navItems.slice(3).map(({ to, label, Icon }) => (
+              <NavLink key={to} to={to} className="flex-1">
+                {({ isActive }) => (
+                  <div className={`flex flex-col items-center gap-0.5 py-2.5 transition-all duration-200 ${isActive ? 'text-rose-500' : 'text-gray-400'}`}>
+                    <div className={`flex items-center justify-center rounded-2xl transition-all duration-200 w-10 h-8 ${isActive ? 'bg-rose-50' : ''}`}>
+                      <Icon filled={isActive} />
+                    </div>
+                    <span className="text-[10px] font-medium leading-none">{label}</span>
+                  </div>
+                )}
+              </NavLink>
+            ))}
+          </div>
         </div>
       </nav>
     </div>
