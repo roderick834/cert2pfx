@@ -349,19 +349,21 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Scroll hint */}
-        <div className="absolute bottom-20 left-0 right-0 flex justify-center pointer-events-none">
+        {/* Scroll hint — tappable, scrolls to below-hero content */}
+        <button
+          className="absolute bottom-20 left-0 right-0 flex justify-center"
+          onClick={() => document.getElementById('home-below')?.scrollIntoView({ behavior: 'smooth' })}
+        >
           <div className="flex flex-col items-center gap-0.5 animate-bounce opacity-60">
-            <span className="text-white text-xs">更多</span>
-            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Below-hero content */}
-      <div className="px-4 pt-5 pb-28 space-y-4">
+      <div id="home-below" className="px-4 pt-5 pb-28 space-y-4">
 
         {/* Upcoming date countdown */}
         {nextDate && (
