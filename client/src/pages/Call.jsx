@@ -40,6 +40,7 @@ export default function Call() {
           ref={remoteVideoRef}
           autoPlay
           playsInline
+          muted
           className="w-full h-full object-cover"
           style={{ background: '#000' }}
         />

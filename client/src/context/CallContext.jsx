@@ -178,7 +178,12 @@ export function CallProvider({ children }) {
 
   const startCall = async (type) => {
     if (!socket || !couple) return;
-    setCallError(''); setCallType(type); setStatus('calling');
+    setCallError(''); setCallType(type);
+    // Unlock audio element in user-gesture context before any await (iOS Safari requires this)
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.play().then(() => { if (remoteAudioRef.current) remoteAudioRef.current.pause(); }).catch(() => {});
+    }
+    setStatus('calling');
     try {
       const stream = await getMedia(type === 'video');
       localStreamRef.current = stream;
@@ -196,6 +201,10 @@ export function CallProvider({ children }) {
   const answerCall = async () => {
     if (!socket || !incomingData) return;
     setCallError('');
+    // Unlock audio element in user-gesture context before any await (iOS Safari requires this)
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.play().then(() => { if (remoteAudioRef.current) remoteAudioRef.current.pause(); }).catch(() => {});
+    }
     try {
       const stream = await getMedia(callType === 'video');
       localStreamRef.current = stream;
